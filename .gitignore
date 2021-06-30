@@ -1,0 +1,6 @@
+bin
+obj
+/packages
+ServerCharacters.sln.DotSettings.user
+.idea
+.vs

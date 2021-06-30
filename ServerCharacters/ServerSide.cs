@@ -1,0 +1,131 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using HarmonyLib;
+using JetBrains.Annotations;
+
+namespace ServerCharacters
+{
+	public static class ServerSide
+	{
+		[HarmonyPatch(typeof(ZNet), nameof(ZNet.OnNewConnection))]
+		private static class PatchZNetOnNewConnection
+		{
+			[UsedImplicitly]
+			private static void Postfix(ZNet __instance, ZNetPeer peer)
+			{
+				if (ZNet.instance.IsServer())
+				{
+					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveProfileFromPeer(onReceivedProfile));
+				}
+			}
+
+			private static void onReceivedProfile(ZRpc peerRpc, byte[] profileData)
+			{
+				PlayerProfile profile = new();
+				if (!profile.LoadPlayerProfileFromBytes(profileData))
+				{
+					// invalid data ...
+					return;
+				}
+
+				profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
+				profile.SavePlayerToDisk();
+			}
+		}
+
+		[HarmonyPatch(typeof(ZNet), "RPC_PeerInfo")]
+		private class SendConfigsAfterLogin
+		{
+			private class BufferingSocket : ISocket
+			{
+				public volatile bool finished = false;
+				public readonly List<ZPackage> Package = new();
+				public readonly ISocket Original;
+
+				public BufferingSocket(ISocket original)
+				{
+					Original = original;
+				}
+
+				public bool IsConnected() => Original.IsConnected();
+				public ZPackage Recv() => Original.Recv();
+				public int GetSendQueueSize() => Original.GetSendQueueSize();
+				public int GetCurrentSendRate() => Original.GetCurrentSendRate();
+				public bool IsHost() => Original.IsHost();
+				public void Dispose() => Original.Dispose();
+				public bool GotNewData() => Original.GotNewData();
+				public void Close() => Original.Close();
+				public string GetEndPointString() => Original.GetEndPointString();
+				public void GetAndResetStats(out int totalSent, out int totalRecv) => Original.GetAndResetStats(out totalSent, out totalRecv);
+				public void GetConnectionQuality(out float localQuality, out float remoteQuality, out int ping, out float outByteSec, out float inByteSec) => Original.GetConnectionQuality(out localQuality, out remoteQuality, out ping, out outByteSec, out inByteSec);
+				public ISocket Accept() => Original.Accept();
+				public int GetHostPort() => Original.GetHostPort();
+				public bool Flush() => Original.Flush();
+				public string GetHostName() => Original.GetHostName();
+
+				public void Send(ZPackage pkg)
+				{
+					pkg.SetPos(0);
+					int methodHash = pkg.ReadInt();
+					if ((methodHash == "PeerInfo".GetStableHashCode() || methodHash == "RoutedRPC".GetStableHashCode()) && !finished)
+					{
+						Package.Add(new ZPackage(pkg.GetArray())); // the original ZPackage gets reused, create a new one
+					}
+					else
+					{
+						Original.Send(pkg);
+					}
+				}
+			}
+
+			[HarmonyPriority(Priority.First)]
+			private static void Prefix(ref BufferingSocket? __state, ZNet __instance, ZRpc rpc)
+			{
+				if (__instance.IsServer())
+				{
+					__state = new BufferingSocket(rpc.GetSocket());
+					AccessTools.DeclaredField(typeof(ZRpc), "m_socket").SetValue(rpc, __state);
+				}
+			}
+
+			private static void Postfix(BufferingSocket __state, ZNet __instance, ZRpc rpc)
+			{
+				if (!__instance.IsServer())
+				{
+					return;
+				}
+
+				ZNetPeer peer = (ZNetPeer)AccessTools.DeclaredMethod(typeof(ZNet), "GetPeer", new[] { typeof(ZRpc) }).Invoke(__instance, new object[] { rpc });
+
+				IEnumerator sendAsync()
+				{
+					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName);
+					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? new byte[0];
+					
+					foreach (bool sending in Shared.sendProfileToPeer(peer, playerProfileData))
+					{
+						if (!sending)
+						{
+							yield return null;
+						}
+					}
+
+					if (rpc.GetSocket() is BufferingSocket bufferingSocket)
+					{
+						rpc.m_socket = bufferingSocket.Original;
+					}
+
+					bufferingSocket = __state;
+					bufferingSocket.finished = true;
+
+					foreach (ZPackage package in bufferingSocket.Package)
+					{
+						bufferingSocket.Original.Send(package);
+					}
+				}
+
+				__instance.StartCoroutine(sendAsync());
+			}
+		}
+	}
+}
