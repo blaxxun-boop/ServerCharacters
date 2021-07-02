@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Threading;
 using HarmonyLib;
 using JetBrains.Annotations;
 using UnityEngine;
@@ -13,6 +14,7 @@ namespace ServerCharacters
 	{
 		private static bool serverCharacter = false;
 		private static bool currentlySaving = false;
+		private static bool forceSynchronousSaving = false;
 		
 		private static string? connectionError;
 
@@ -21,12 +23,11 @@ namespace ServerCharacters
 		{
 			private static byte[] SaveCharacterToServer(byte[] packageArray)
 			{
-				if (!serverCharacter || currentlySaving)
+				if (!serverCharacter || currentlySaving || ZNet.instance?.GetServerPeer()?.IsReady() != true)
 				{
 					return packageArray;
 				}
 
-				currentlySaving = true;
 				IEnumerator saveAsync()
 				{
 					foreach (bool sending in Shared.sendProfileToPeer(ZNet.instance.GetServerPeer(), packageArray))
@@ -39,7 +40,21 @@ namespace ServerCharacters
 
 					currentlySaving = false;
 				}
-				ZNet.instance.StartCoroutine(saveAsync());
+				if (forceSynchronousSaving)
+				{
+					foreach (bool sending in Shared.sendProfileToPeer(ZNet.instance.GetServerPeer(), packageArray))
+					{
+						if (!sending)
+						{
+							Thread.Sleep(10); // busy loop, force waiting before continuing...
+						}
+					}
+				}
+				else
+				{
+					currentlySaving = true;
+					ZNet.instance.StartCoroutine(saveAsync());
+				}
 
 				return packageArray;
 			}
@@ -159,11 +174,45 @@ namespace ServerCharacters
 		{
 			private static void Postfix(FejdStartup __instance)
 			{
+				if ((int) ZNet.GetConnectionStatus() == ServerCharacters.MaintenanceDisconnectMagic)
+				{
+					__instance.m_connectionFailedError.text = "Server is undergoing maintenance. Please try again later.";
+				}
 				if (__instance.m_connectionFailedPanel.activeSelf && connectionError != null)
 				{
 					__instance.m_connectionFailedError.text += "\n" + connectionError;
 					connectionError = null;
 				}
+			}
+		}
+
+		[HarmonyPatch(typeof(ZNet), nameof(ZNet.RPC_Disconnect))]
+		private class PatchZNetRPC_Disconnect
+		{
+			[UsedImplicitly]
+			private static void Prefix(ZNet __instance)
+			{
+				if (__instance.IsServer())
+				{
+					return;
+				}
+
+				if (serverCharacter)
+				{
+					forceSynchronousSaving = true;
+					Game.instance.SavePlayerProfile(true);
+					forceSynchronousSaving = false;
+				}
+			}
+		}
+
+		[HarmonyPatch(typeof(Game), nameof(Game.OnApplicationQuit))]
+		private class PatchGameOnApplicationQuit
+		{
+			[UsedImplicitly]
+			private static void Prefix()
+			{
+				forceSynchronousSaving = true;
 			}
 		}
 	}

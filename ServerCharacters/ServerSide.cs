@@ -1,7 +1,11 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using JetBrains.Annotations;
+using UnityEngine;
 
 namespace ServerCharacters
 {
@@ -13,8 +17,13 @@ namespace ServerCharacters
 			[UsedImplicitly]
 			private static void Postfix(ZNet __instance, ZNetPeer peer)
 			{
-				if (ZNet.instance.IsServer())
+				if (__instance.IsServer())
 				{
+					if (ServerCharacters.maintenanceMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()))
+					{
+						peer.m_rpc.Invoke("Error", ServerCharacters.MaintenanceDisconnectMagic);
+						__instance.Disconnect(peer);
+					}
 					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveProfileFromPeer(onReceivedProfile));
 				}
 			}
@@ -125,6 +134,41 @@ namespace ServerCharacters
 				}
 
 				__instance.StartCoroutine(sendAsync());
+			}
+		}
+		
+		[HarmonyPatch(typeof(ZNet), nameof(ZNet.InternalKick), typeof(ZNetPeer))]
+		private static class PatchZNetKick
+		{
+			private static readonly MethodInfo DisconnectSender = AccessTools.DeclaredMethod(typeof(ZNet), nameof(ZNet.SendDisconnect), new []{ typeof(ZNetPeer) });
+
+			[UsedImplicitly]
+			private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+			{
+				List<CodeInstruction> instructionList = instructions.ToList();
+				foreach (CodeInstruction instruction in instructionList)
+				{
+					yield return instruction;
+					if (instruction.opcode == OpCodes.Call && instruction.OperandIs(DisconnectSender))
+					{
+						yield return instructionList.Last(); // ret opcode
+						// Skip this.Disconnect() call
+						yield break;
+					}
+				}
+			}
+
+			[UsedImplicitly]
+			private static void Postfix(ZNet __instance, ZNetPeer peer)
+			{
+				int endTime = ServerCharacters.monotonicCounter + 30;
+				IEnumerator shutdownAfterSave()
+				{
+					yield return new WaitWhile(() => peer.m_socket.IsConnected() && endTime > ServerCharacters.monotonicCounter);
+					__instance.Disconnect(peer);
+				}
+
+				__instance.StartCoroutine(shutdownAfterSave());
 			}
 		}
 	}
