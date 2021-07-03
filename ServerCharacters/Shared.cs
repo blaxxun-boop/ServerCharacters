@@ -123,12 +123,12 @@ namespace ServerCharacters
 			byte[] rawProfile = output.ToArray();
 			onReceived(sender, rawProfile);
 		};
-		
+
 		public static bool LoadPlayerProfileFromBytes(this PlayerProfile profile, byte[] data)
 		{
 			throw new NotImplementedException("Was not patched ...");
 		}
-		
+
 		[HarmonyPatch(typeof(Shared), nameof(LoadPlayerProfileFromBytes))]
 		private static class LoadPlayerProfileLoader
 		{
@@ -138,11 +138,37 @@ namespace ServerCharacters
 			{
 				instructions = PatchProcessor.GetOriginalInstructions(AccessTools.DeclaredMethod(typeof(PlayerProfile), nameof(PlayerProfile.LoadPlayerFromDisk)), ilGenerator);
 				yield return new CodeInstruction(OpCodes.Ldarg_1) { blocks = instructions.First().blocks }; // byte[] data
-				yield return new CodeInstruction(OpCodes.Newobj, AccessTools.DeclaredConstructor(typeof(ZPackage), new []{ typeof(byte[]) }));
+				yield return new CodeInstruction(OpCodes.Newobj, AccessTools.DeclaredConstructor(typeof(ZPackage), new[] { typeof(byte[]) }));
 				foreach (CodeInstruction instruction in instructions.Skip(2)) // skip this.LoadPlayerDataFromDisk()
 				{
 					yield return instruction;
 				}
+			}
+		}
+
+		[HarmonyPatch(typeof(ZNet), nameof(ZNet.RPC_PeerInfo))]
+		private static class PatchZNetRPC_PeerInfo
+		{
+			[HarmonyPriority(Priority.Last)]
+			private static void Prefix(ref ZPackage pkg)
+			{
+				long uid = pkg.ReadLong();
+				string versionString = pkg.ReadString();
+
+				if (ZNet.instance.IsServer())
+				{
+					versionString += "-ServerCharacters";
+				}
+				else
+				{
+					versionString = versionString.Replace("-ServerCharacters", "");
+				}
+				ZPackage newPkg = new();
+				newPkg.Write(uid);
+				newPkg.Write(versionString);
+				newPkg.m_writer.Write(pkg.m_reader.ReadBytes((int)(pkg.m_stream.Length - pkg.m_stream.Position)));
+				pkg = newPkg;
+				pkg.SetPos(0);
 			}
 		}
 	}

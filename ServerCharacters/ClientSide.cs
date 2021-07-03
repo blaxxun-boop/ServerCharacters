@@ -15,7 +15,7 @@ namespace ServerCharacters
 		private static bool serverCharacter = false;
 		private static bool currentlySaving = false;
 		private static bool forceSynchronousSaving = false;
-		
+
 		private static string? connectionError;
 
 		[HarmonyPatch(typeof(PlayerProfile), nameof(PlayerProfile.SavePlayerToDisk))]
@@ -105,7 +105,7 @@ namespace ServerCharacters
 						ZNet.m_connectionStatus = originalConnectionStatus;
 					}
 				}
-				
+
 				if (currentlySaving)
 				{
 					static IEnumerator shutdownAfterSave()
@@ -122,7 +122,7 @@ namespace ServerCharacters
 				}
 			}
 		}
-		
+
 		[HarmonyPatch(typeof(ZNet), nameof(ZNet.OnNewConnection))]
 		private static class PatchZNetOnNewConnection
 		{
@@ -168,13 +168,13 @@ namespace ServerCharacters
 				Game.instance.m_playerProfile = profile;
 			}
 		}
-		
+
 		[HarmonyPatch(typeof(FejdStartup), nameof(FejdStartup.ShowConnectError))]
 		private class ShowConnectionError
 		{
 			private static void Postfix(FejdStartup __instance)
 			{
-				if ((int) ZNet.GetConnectionStatus() == ServerCharacters.MaintenanceDisconnectMagic)
+				if ((int)ZNet.GetConnectionStatus() == ServerCharacters.MaintenanceDisconnectMagic)
 				{
 					__instance.m_connectionFailedError.text = "Server is undergoing maintenance. Please try again later.";
 				}

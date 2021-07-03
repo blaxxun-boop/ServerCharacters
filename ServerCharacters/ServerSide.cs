@@ -171,5 +171,18 @@ namespace ServerCharacters
 				__instance.StartCoroutine(shutdownAfterSave());
 			}
 		}
+		
+		[HarmonyPatch(typeof(Version), nameof(Version.GetVersionString))]
+		private static class PatchVersionGetVersionString
+		{
+			[HarmonyPriority(Priority.Last)]
+			private static void Postfix(ref string __result)
+			{
+				if (ZNet.instance?.IsServer() == true)
+				{
+					__result += "-ServerCharacters";
+				}
+			}
+		}
 	}
 }
