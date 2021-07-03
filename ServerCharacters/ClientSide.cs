@@ -19,7 +19,7 @@ namespace ServerCharacters
 		private static string? connectionError;
 
 		[HarmonyPatch(typeof(PlayerProfile), nameof(PlayerProfile.SavePlayerToDisk))]
-		private static class PatchPlayerProfileSave
+		private static class PatchPlayerProfileSave_Client
 		{
 			private static byte[] SaveCharacterToServer(byte[] packageArray)
 			{
@@ -60,7 +60,7 @@ namespace ServerCharacters
 			}
 
 			private static readonly MethodInfo ArrayWriter = AccessTools.DeclaredMethod(typeof(BinaryWriter), nameof(BinaryWriter.Write), new[] { typeof(byte[]) });
-			private static readonly MethodInfo ServerCharacterSaver = AccessTools.DeclaredMethod(typeof(PatchPlayerProfileSave), nameof(SaveCharacterToServer));
+			private static readonly MethodInfo ServerCharacterSaver = AccessTools.DeclaredMethod(typeof(PatchPlayerProfileSave_Client), nameof(SaveCharacterToServer));
 
 			[UsedImplicitly]
 			private static IEnumerable<CodeInstruction> Transpiler(MethodBase method, IEnumerable<CodeInstruction> instructions)

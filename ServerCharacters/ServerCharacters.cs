@@ -27,6 +27,7 @@ namespace ServerCharacters
 		private static ConfigEntry<Toggle> serverConfigLocked = null!;
 		public static ConfigEntry<Toggle> maintenanceMode = null!;
 		private static ConfigEntry<int> maintenanceTimer = null!;
+		public static ConfigEntry<int> backupsToKeep = null!;
 
 		private ConfigEntry<T> config<T>(string group, string name, T value, ConfigDescription description, bool synchronizedSetting = true)
 		{
@@ -47,6 +48,7 @@ namespace ServerCharacters
 			maintenanceMode = config("1 - General", "Maintenance Mode", Toggle.Off, "If set to on, a timer will start. If the timer elapses, all non-admins will be disconnected, the world will be saved and only admins will be able to connect to the server, until maintenance mode is toggled to off.");
 			maintenanceMode.SettingChanged += toggleMaintenanceMode;
 			maintenanceTimer = config("1 - General", "Maintenance Timer", 300, new ConfigDescription("Time in seconds that has to pass, before the maintenance mode becomes active.", new AcceptableValueRange<int>(10, 1800)));
+			backupsToKeep = config("1 - General", "Number of backups to keep", 5, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(0, 15)));
 
 			Assembly assembly = Assembly.GetExecutingAssembly();
 			Harmony harmony = new(ModGUID);

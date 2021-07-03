@@ -1,11 +1,14 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 using JetBrains.Annotations;
 using UnityEngine;
+using System.IO.Compression;
 
 namespace ServerCharacters
 {
@@ -110,7 +113,7 @@ namespace ServerCharacters
 				{
 					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName);
 					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? new byte[0];
-					
+
 					foreach (bool sending in Shared.sendProfileToPeer(peer, playerProfileData))
 					{
 						if (!sending)
@@ -136,11 +139,11 @@ namespace ServerCharacters
 				__instance.StartCoroutine(sendAsync());
 			}
 		}
-		
+
 		[HarmonyPatch(typeof(ZNet), nameof(ZNet.InternalKick), typeof(ZNetPeer))]
 		private static class PatchZNetKick
 		{
-			private static readonly MethodInfo DisconnectSender = AccessTools.DeclaredMethod(typeof(ZNet), nameof(ZNet.SendDisconnect), new []{ typeof(ZNetPeer) });
+			private static readonly MethodInfo DisconnectSender = AccessTools.DeclaredMethod(typeof(ZNet), nameof(ZNet.SendDisconnect), new[] { typeof(ZNetPeer) });
 
 			[UsedImplicitly]
 			private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
@@ -171,7 +174,7 @@ namespace ServerCharacters
 				__instance.StartCoroutine(shutdownAfterSave());
 			}
 		}
-		
+
 		[HarmonyPatch(typeof(Version), nameof(Version.GetVersionString))]
 		private static class PatchVersionGetVersionString
 		{
@@ -181,6 +184,31 @@ namespace ServerCharacters
 				if (ZNet.instance?.IsServer() == true)
 				{
 					__result += "-ServerCharacters";
+				}
+			}
+		}
+
+		[HarmonyPatch(typeof(PlayerProfile), nameof(PlayerProfile.SavePlayerToDisk))]
+		private static class PatchPlayerProfileSave_Server
+		{
+			private static void Postfix(PlayerProfile __instance)
+			{
+				if (ZNet.instance.IsServer())
+				{
+					string saveFile = global::Utils.GetSaveDataPath() + "/characters/" + __instance.m_filename + ".fch.old";
+					if (File.Exists(saveFile))
+					{
+						Directory.CreateDirectory(global::Utils.GetSaveDataPath() + "/characters/backups");
+						using FileStream zipToOpen = new(global::Utils.GetSaveDataPath() + "/characters/backups/" + __instance.m_filename + ".zip", FileMode.OpenOrCreate);
+						using ZipArchive archive = new(zipToOpen, ZipArchiveMode.Update);
+
+						while (archive.Entries.Count >= ServerCharacters.backupsToKeep.Value)
+						{
+							archive.Entries.First().Delete();
+						}
+
+						archive.CreateEntryFromFile(saveFile, __instance.m_filename + "-" + DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") + ".fch");
+					}
 				}
 			}
 		}
