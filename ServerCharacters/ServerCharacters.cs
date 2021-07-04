@@ -21,6 +21,7 @@ namespace ServerCharacters
 		public static int monotonicCounter = 0;
 
 		public const int MaintenanceDisconnectMagic = 987345987;
+		public const int CharacterNameDisconnectMagic = 498209834;
 
 		private readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName };
 

@@ -154,7 +154,7 @@ namespace ServerCharacters
 					return;
 				}
 
-				if (!profile.LoadPlayerProfileFromBytes(profileData))
+				if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.m_playerName))
 				{
 					Game.instance.Logout();
 					ZNet.m_connectionStatus = ZNet.ConnectionStatus.ErrorConnectFailed;
@@ -177,6 +177,10 @@ namespace ServerCharacters
 				if ((int)ZNet.GetConnectionStatus() == ServerCharacters.MaintenanceDisconnectMagic)
 				{
 					__instance.m_connectionFailedError.text = "Server is undergoing maintenance. Please try again later.";
+				}
+				if ((int)ZNet.GetConnectionStatus() == ServerCharacters.CharacterNameDisconnectMagic)
+				{
+					__instance.m_connectionFailedError.text = "Your character name contains illegal characters. Please choose a different name.";
 				}
 				if (__instance.m_connectionFailedPanel.activeSelf && connectionError != null)
 				{

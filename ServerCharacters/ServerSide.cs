@@ -39,7 +39,12 @@ namespace ServerCharacters
 					// invalid data ...
 					return;
 				}
-
+				if (Shared.CharacterNameIsForbidden(profile.GetName()))
+				{
+					peerRpc.Invoke("Error", ServerCharacters.CharacterNameDisconnectMagic);
+					ZNet.instance.Disconnect(ZNet.instance.GetPeer(peerRpc));
+					return;
+				}
 				profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
 				profile.SavePlayerToDisk();
 			}
@@ -193,7 +198,7 @@ namespace ServerCharacters
 		{
 			private static void Postfix(PlayerProfile __instance)
 			{
-				if (ZNet.instance.IsServer())
+				if (ZNet.instance?.IsServer() == true)
 				{
 					string saveFile = global::Utils.GetSaveDataPath() + "/characters/" + __instance.m_filename + ".fch.old";
 					if (File.Exists(saveFile))
@@ -207,7 +212,7 @@ namespace ServerCharacters
 							archive.Entries.First().Delete();
 						}
 
-						archive.CreateEntryFromFile(saveFile, __instance.m_filename + "-" + DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") + ".fch");
+						archive.CreateEntryFromFile(saveFile, __instance.m_filename + "-" + DateTime.Now.ToString("yyyy-MM-ddTHH-mm-ss") + ".fch");
 					}
 				}
 			}
