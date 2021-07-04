@@ -40,7 +40,7 @@ namespace ServerCharacters
 					return;
 				}
 
-				profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
+				profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName().Replace(" ", "_");
 				profile.SavePlayerToDisk();
 			}
 		}
@@ -111,7 +111,7 @@ namespace ServerCharacters
 
 				IEnumerator sendAsync()
 				{
-					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName);
+					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName.Replace(" ", "_"));
 					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? new byte[0];
 
 					foreach (bool sending in Shared.sendProfileToPeer(peer, playerProfileData))
