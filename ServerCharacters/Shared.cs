@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 using JetBrains.Annotations;
@@ -33,7 +34,7 @@ namespace ServerCharacters
 				{
 					if (Time.time > timeout)
 					{
-						Debug.Log($"Disconnecting {peer.m_uid} after 30 seconds player profile sending timeout");
+						Debug.Log($"Disconnecting {peer.m_uid}. Profile sending timed out after 30 seconds.");
 						peer.m_rpc.Invoke("Error", ZNet.ConnectionStatus.ErrorConnectFailed);
 						ZNet.instance.Disconnect(peer);
 						yield break;
@@ -170,6 +171,30 @@ namespace ServerCharacters
 				pkg = newPkg;
 				pkg.SetPos(0);
 			}
+		}
+		
+		[HarmonyPatch(typeof(Game), nameof(Game.UpdateSaving))]
+		private static class PatchGameUpdateSaving
+		{
+			private static readonly MethodInfo getAutoSaveInterval = AccessTools.DeclaredMethod(typeof(PatchGameUpdateSaving), nameof(getAutoSaveIntervalSetting));
+
+			[UsedImplicitly]
+			private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+			{
+				foreach (CodeInstruction instruction in instructions)
+				{
+					if (instruction.opcode == OpCodes.Ldc_R4 && instruction.OperandIs(Game.m_saveInterval))
+					{
+						yield return new CodeInstruction(OpCodes.Call, getAutoSaveInterval);
+					}
+					else
+					{
+						yield return instruction;
+					}
+				}
+			}
+
+			private static float getAutoSaveIntervalSetting() => ServerCharacters.autoSaveInterval.Value * 60;
 		}
 	}
 }

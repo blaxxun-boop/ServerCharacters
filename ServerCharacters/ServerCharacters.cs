@@ -28,6 +28,7 @@ namespace ServerCharacters
 		public static ConfigEntry<Toggle> maintenanceMode = null!;
 		private static ConfigEntry<int> maintenanceTimer = null!;
 		public static ConfigEntry<int> backupsToKeep = null!;
+		public static ConfigEntry<int> autoSaveInterval = null!;
 
 		private ConfigEntry<T> config<T>(string group, string name, T value, ConfigDescription description, bool synchronizedSetting = true)
 		{
@@ -49,6 +50,7 @@ namespace ServerCharacters
 			maintenanceMode.SettingChanged += toggleMaintenanceMode;
 			maintenanceTimer = config("1 - General", "Maintenance Timer", 300, new ConfigDescription("Time in seconds that has to pass, before the maintenance mode becomes active.", new AcceptableValueRange<int>(10, 1800)));
 			backupsToKeep = config("1 - General", "Number of backups to keep", 5, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(0, 15)));
+			autoSaveInterval = config("1 - General", "Auto save interval", 20, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 30)));
 
 			Assembly assembly = Assembly.GetExecutingAssembly();
 			Harmony harmony = new(ModGUID);
