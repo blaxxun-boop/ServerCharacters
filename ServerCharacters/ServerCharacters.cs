@@ -1,6 +1,9 @@
 ﻿using System;
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -30,6 +33,12 @@ namespace ServerCharacters
 		private static ConfigEntry<int> maintenanceTimer = null!;
 		public static ConfigEntry<int> backupsToKeep = null!;
 		public static ConfigEntry<int> autoSaveInterval = null!;
+		public static ConfigEntry<string> webhookURL = null!;
+		public static ConfigEntry<string> webhookUsername = null!;
+		public static ConfigEntry<string> maintenanceEnabledText = null!;
+		public static ConfigEntry<string> maintenanceFinishedText = null!;
+		public static ConfigEntry<string> maintenanceAbortedText = null!;
+		public static ConfigEntry<string> maintenanceStartedText = null!;
 
 		private ConfigEntry<T> config<T>(string group, string name, T value, ConfigDescription description, bool synchronizedSetting = true)
 		{
@@ -43,6 +52,11 @@ namespace ServerCharacters
 
 		private ConfigEntry<T> config<T>(string group, string name, T value, string description, bool synchronizedSetting = true) => config(group, name, value, new ConfigDescription(description), synchronizedSetting);
 
+		private class ConfigurationManagerAttributes
+		{
+			public bool? Browsable = false;
+		}
+
 		public void Awake()
 		{
 			serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.Off, "If on, the configuration is locked and can be changed by server admins only.");
@@ -52,6 +66,12 @@ namespace ServerCharacters
 			maintenanceTimer = config("1 - General", "Maintenance Timer", 300, new ConfigDescription("Time in seconds that has to pass, before the maintenance mode becomes active.", new AcceptableValueRange<int>(10, 1800)));
 			backupsToKeep = config("1 - General", "Number of backups to keep", 5, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(0, 15)));
 			autoSaveInterval = config("1 - General", "Auto save interval", 20, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 30)));
+			webhookURL = config("1 - General", "Discord Webhook URL", "", new ConfigDescription("Discord API endpoint to announce maintenance.", null, new ConfigurationManagerAttributes()), false);
+			webhookUsername = config("1 - General", "Username to use for Discord", "Maintenance Bot", new ConfigDescription("Username to be used for maintenance related posts to Discord.", null, new ConfigurationManagerAttributes()), false);
+			maintenanceEnabledText = config("1 - General", "Maintenance enabled text", "Maintenance mode enabled. All non-admins will be disconnected in {time}.", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'On'. Leave empty to not post anything. Use {time} for the time until the maintenance starts.", null, new ConfigurationManagerAttributes()), false);
+			maintenanceFinishedText = config("1 - General", "Maintenance finished text", "Maintenance has been disabled and the server is back online. Have fun!", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'Off'. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
+			maintenanceAbortedText = config("1 - General", "Maintenance aborted text", "Maintenance has been aborted.", new ConfigDescription("Message to be posted to Discord, when the maintenance has been aborted. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
+			maintenanceStartedText = config("1 - General", "Maintenance started text", "Maintenance has started and players will be unable to connect.", new ConfigDescription("Message to be posted to Discord, when the maintenance has begun. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
 
 			Assembly assembly = Assembly.GetExecutingAssembly();
 			Harmony harmony = new(ModGUID);
@@ -83,7 +103,7 @@ namespace ServerCharacters
 		{
 			if (maintenanceMode.GetToggle())
 			{
-				string text = $"Maintenance mode enabled. All non-admins will be disconnected in {maintenanceTimer.Value} seconds";
+				string text = $"Maintenance mode enabled. All non-admins will be disconnected in {Utils.getHumanFriendlyTime(maintenanceTimer.Value)}.";
 				Player.m_localPlayer?.Message(MessageHud.MessageType.Center, text);
 
 				tickCount = maintenanceTimer.Value;
@@ -91,21 +111,24 @@ namespace ServerCharacters
 				if (configSync.IsSourceOfTruth)
 				{
 					File.Create(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
+					Utils.PostToDiscord(maintenanceEnabledText.Value.Replace("{time}", Utils.getHumanFriendlyTime(maintenanceTimer.Value)));
 				}
 			}
 			else
 			{
+				if (configSync.IsSourceOfTruth)
+				{
+					File.Delete(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
+
+					Utils.PostToDiscord(tickCount <= maintenanceTimer.Value ? maintenanceAbortedText.Value : maintenanceFinishedText.Value);
+				}
+				
 				if (tickCount <= maintenanceTimer.Value)
 				{
 					const string text = "Maintenance aborted";
 					Player.m_localPlayer?.Message(MessageHud.MessageType.Center, text);
 
 					tickCount = int.MaxValue;
-				}
-
-				if (configSync.IsSourceOfTruth)
-				{
-					File.Delete(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
 				}
 			}
 		}
@@ -132,6 +155,7 @@ namespace ServerCharacters
 					}
 
 					ZNet.instance.ConsoleSave();
+					Utils.PostToDiscord(maintenanceStartedText.Value);
 				}
 
 				tickCount = int.MaxValue;
