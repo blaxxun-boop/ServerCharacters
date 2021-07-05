@@ -197,6 +197,9 @@ namespace ServerCharacters
 			private static float getAutoSaveIntervalSetting() => ServerCharacters.autoSaveInterval.Value * 60;
 		}
 
-		public static bool CharacterNameIsForbidden(string characterName) => characterName.Any(c => c != ' ' && c != '\'' && !char.IsLetter(c));
+		public static bool CharacterNameIsForbidden(string characterName)
+		{
+			return characterName.Length < 3 || characterName.Any(c => c != ' ' && c != '\'' && !char.IsLetter(c));
+		}
 	}
 }
