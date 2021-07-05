@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.Serialization;
 using System.Threading;
 using HarmonyLib;
 using JetBrains.Annotations;
+using ServerSync;
 using UnityEngine;
+using YamlDotNet.Serialization;
 
 namespace ServerCharacters
 {
@@ -15,6 +18,7 @@ namespace ServerCharacters
 		private static bool serverCharacter = false;
 		private static bool currentlySaving = false;
 		private static bool forceSynchronousSaving = false;
+		private static bool acquireCharacterFromTemplate = false;
 
 		private static string? connectionError;
 
@@ -149,6 +153,7 @@ namespace ServerCharacters
 					else
 					{
 						serverCharacter = true;
+						acquireCharacterFromTemplate = true;
 					}
 
 					return;
@@ -166,6 +171,55 @@ namespace ServerCharacters
 
 				profile.m_filename = Game.instance.m_playerProfile.m_filename;
 				Game.instance.m_playerProfile = profile;
+			}
+		}
+		
+		[HarmonyPatch(typeof(Game), nameof(Game.SpawnPlayer))]
+		private class InitializePlayerFromTemplate
+		{
+			[UsedImplicitly]
+			private static void Postfix()
+			{
+				if (!acquireCharacterFromTemplate)
+				{
+					return;
+				}
+				acquireCharacterFromTemplate = false;
+				
+				try
+				{
+					PlayerTemplate? template = new DeserializerBuilder().IgnoreFields().Build().Deserialize<PlayerTemplate?>(ServerCharacters.playerTemplate.Value);
+					if (template == null)
+					{
+						return;
+					}
+					
+					foreach (Skills.SkillDef skill in Player.m_localPlayer.GetSkills().m_skills)
+					{
+						if (template.skills.TryGetValue(skill.m_skill.ToString(), out float skillValue))
+						{
+							Player.m_localPlayer.GetSkills().GetSkill(skill.m_skill).m_level = skillValue;
+						}
+					}
+
+					Inventory inventory = Player.m_localPlayer.m_inventory;
+					foreach (KeyValuePair<string, int> item in template.items)
+					{
+						GameObject itemPrefab = ObjectDB.instance.GetItemPrefab(item.Key);
+						if (itemPrefab)
+						{
+							ItemDrop.ItemData itemData = itemPrefab.GetComponent<ItemDrop>().m_itemData.Clone();
+							itemData.m_stack = item.Value;
+							inventory.AddItem(itemData);
+						}
+					}
+
+					if (template.spawn is PlayerTemplate.Position spawnPos)
+					{
+						Player.m_localPlayer.transform.position = new Vector3(spawnPos.x, spawnPos.y, spawnPos.z);
+					}
+
+				} catch (SerializationException) {}
 			}
 		}
 

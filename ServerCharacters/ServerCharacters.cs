@@ -1,9 +1,6 @@
 ﻿using System;
 using System.IO;
-using System.Net;
-using System.Net.Http;
 using System.Reflection;
-using System.Text;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -26,7 +23,7 @@ namespace ServerCharacters
 		public const int MaintenanceDisconnectMagic = 987345987;
 		public const int CharacterNameDisconnectMagic = 498209834;
 
-		private readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName };
+		private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName };
 
 		private static ConfigEntry<Toggle> serverConfigLocked = null!;
 		public static ConfigEntry<Toggle> maintenanceMode = null!;
@@ -35,10 +32,14 @@ namespace ServerCharacters
 		public static ConfigEntry<int> autoSaveInterval = null!;
 		public static ConfigEntry<string> webhookURL = null!;
 		public static ConfigEntry<string> webhookUsername = null!;
-		public static ConfigEntry<string> maintenanceEnabledText = null!;
-		public static ConfigEntry<string> maintenanceFinishedText = null!;
-		public static ConfigEntry<string> maintenanceAbortedText = null!;
-		public static ConfigEntry<string> maintenanceStartedText = null!;
+		private static ConfigEntry<string> maintenanceEnabledText = null!;
+		private static ConfigEntry<string> maintenanceFinishedText = null!;
+		private static ConfigEntry<string> maintenanceAbortedText = null!;
+		private static ConfigEntry<string> maintenanceStartedText = null!;
+
+		public static readonly CustomSyncedValue<string> playerTemplate = new(configSync, "PlayerTemplate", readCharacterTemplate());
+
+		private static string pluginDir => Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
 
 		private ConfigEntry<T> config<T>(string group, string name, T value, ConfigDescription description, bool synchronizedSetting = true)
 		{
@@ -77,17 +78,26 @@ namespace ServerCharacters
 			Harmony harmony = new(ModGUID);
 			harmony.PatchAll(assembly);
 
-			FileSystemWatcher watcher = new(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "maintenance");
-			watcher.Created += maintenanceFileEvent;
-			watcher.Deleted += maintenanceFileEvent;
-			watcher.IncludeSubdirectories = true;
-			watcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
-			watcher.EnableRaisingEvents = true;
+			FileSystemWatcher maintenanceFileWatcher = new(pluginDir, "maintenance");
+			maintenanceFileWatcher.Created += maintenanceFileEvent;
+			maintenanceFileWatcher.Deleted += maintenanceFileEvent;
+			maintenanceFileWatcher.IncludeSubdirectories = true;
+			maintenanceFileWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
+			maintenanceFileWatcher.EnableRaisingEvents = true;
+			
+			FileSystemWatcher characterTemplateWatcher = new(pluginDir, "CharacterTemplate.yml");
+			characterTemplateWatcher.Created += templateFileEvent;
+			characterTemplateWatcher.Changed += templateFileEvent;
+			characterTemplateWatcher.Renamed += templateFileEvent;
+			characterTemplateWatcher.Deleted += templateFileEvent;
+			characterTemplateWatcher.IncludeSubdirectories = true;
+			characterTemplateWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
+			characterTemplateWatcher.EnableRaisingEvents = true;
 		}
 
 		private static void maintenanceFileEvent(object s, EventArgs e)
 		{
-			Toggle maintenance = File.Exists(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance") ? Toggle.On : Toggle.Off;
+			Toggle maintenance = File.Exists(pluginDir + Path.DirectorySeparatorChar + "maintenance") ? Toggle.On : Toggle.Off;
 			SyncedConfigEntry<Toggle> cfg = ConfigSync.ConfigData(maintenanceMode)!;
 			if (cfg.LocalBaseValue == null)
 			{
@@ -97,6 +107,14 @@ namespace ServerCharacters
 			{
 				cfg.LocalBaseValue = maintenance;
 			}
+		}
+
+		private static void templateFileEvent(object s, EventArgs e) => playerTemplate.AssignLocalValue(readCharacterTemplate());
+
+		private static string readCharacterTemplate()
+		{
+			string templatePath = pluginDir + Path.DirectorySeparatorChar + "CharacterTemplate.yml";
+			return File.Exists(templatePath) ? File.ReadAllText(templatePath) : "";
 		}
 
 		private void toggleMaintenanceMode(object s, EventArgs e)
