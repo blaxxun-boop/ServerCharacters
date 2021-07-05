@@ -210,6 +210,7 @@ namespace ServerCharacters
 						{
 							ItemDrop.ItemData itemData = itemPrefab.GetComponent<ItemDrop>().m_itemData.Clone();
 							itemData.m_stack = item.Value;
+							itemData.m_durability = itemData.GetMaxDurability();
 							inventory.AddItem(itemData);
 						}
 					}
