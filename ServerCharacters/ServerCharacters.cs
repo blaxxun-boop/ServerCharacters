@@ -16,6 +16,8 @@ namespace ServerCharacters
 		private const string ModVersion = "1.0";
 		private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
+		private static ServerCharacters selfReference;
+
 		private float fixedUpdateCount = 0;
 		private int tickCount = int.MaxValue;
 		public static int monotonicCounter = 0;
@@ -60,6 +62,7 @@ namespace ServerCharacters
 
 		public void Awake()
 		{
+			selfReference = this;
 			serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.Off, "If on, the configuration is locked and can be changed by server admins only.");
 			configSync.AddLockingConfigEntry(serverConfigLocked);
 			maintenanceMode = config("1 - General", "Maintenance Mode", Toggle.Off, "If set to on, a timer will start. If the timer elapses, all non-admins will be disconnected, the world will be saved and only admins will be able to connect to the server, until maintenance mode is toggled to off.");
@@ -123,6 +126,7 @@ namespace ServerCharacters
 			{
 				string text = $"Maintenance mode enabled. All non-admins will be disconnected in {Utils.getHumanFriendlyTime(maintenanceTimer.Value)}.";
 				Player.m_localPlayer?.Message(MessageHud.MessageType.Center, text);
+				Log(text);
 
 				tickCount = maintenanceTimer.Value;
 
@@ -145,6 +149,7 @@ namespace ServerCharacters
 				{
 					const string text = "Maintenance aborted";
 					Player.m_localPlayer?.Message(MessageHud.MessageType.Center, text);
+					Log(text);
 
 					tickCount = int.MaxValue;
 				}
@@ -169,10 +174,12 @@ namespace ServerCharacters
 						if (!ZNet.instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()))
 						{
 							ZNet.instance.InternalKick(peer);
+							Log($"disconnected client {peer.m_rpc.GetSocket().GetHostName()}");
 						}
 					}
 
 					ZNet.instance.ConsoleSave();
+					Log("saved world");
 					Utils.PostToDiscord(maintenanceStartedText.Value);
 				}
 
@@ -183,5 +190,10 @@ namespace ServerCharacters
 			--tickCount;
 			++monotonicCounter;
 		}
+
+		public static void Log(string message)
+        {
+			selfReference.Logger.LogMessage(message);
+        }
 	}
 }

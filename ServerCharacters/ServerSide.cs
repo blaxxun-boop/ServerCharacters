@@ -25,6 +25,8 @@ namespace ServerCharacters
 					if (ServerCharacters.maintenanceMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()))
 					{
 						peer.m_rpc.Invoke("Error", ServerCharacters.MaintenanceDisconnectMagic);
+						ServerCharacters.Log($"client {peer.m_rpc.GetSocket().GetHostName()} tried connecting " +
+							$"during maintencance and got revoked");
 						__instance.Disconnect(peer);
 					}
 					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveProfileFromPeer(onReceivedProfile));
@@ -43,10 +45,13 @@ namespace ServerCharacters
 				{
 					peerRpc.Invoke("Error", ServerCharacters.CharacterNameDisconnectMagic);
 					ZNet.instance.Disconnect(ZNet.instance.GetPeer(peerRpc));
+					ServerCharacters.Log($"client {peerRpc.GetSocket().GetHostName()} with bad profile name" +
+						$" '{profile.GetName()}' tried connecting and got revoked");
 					return;
 				}
 				profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
 				profile.SavePlayerToDisk();
+				ServerCharacters.Log($"saved player profile data for {profile.m_filename}");
 			}
 		}
 
@@ -212,7 +217,9 @@ namespace ServerCharacters
 							archive.Entries.First().Delete();
 						}
 
-						archive.CreateEntryFromFile(saveFile, __instance.m_filename + "-" + DateTime.Now.ToString("yyyy-MM-ddTHH-mm-ss") + ".fch");
+						string fileName = __instance.m_filename + "-" + DateTime.Now.ToString("yyyy-MM-ddTHH-mm-ss") + ".fch";
+						archive.CreateEntryFromFile(saveFile, fileName);
+						ServerCharacters.Log($"stored backup file '{fileName}'");
 					}
 				}
 			}
