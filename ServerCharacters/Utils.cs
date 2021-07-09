@@ -39,5 +39,10 @@ namespace ServerCharacters
 				writer.WriteAsync(json).ContinueWith(_ => discordAPI.GetResponseAsync());
 			});
 		}
+
+		public static void Log(string message)
+		{
+			ServerCharacters.logger.LogMessage(message);
+		}
 	}
 }

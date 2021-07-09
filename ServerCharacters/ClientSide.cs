@@ -1,13 +1,14 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.Serialization;
+using System.Security.Cryptography;
 using System.Threading;
 using HarmonyLib;
 using JetBrains.Annotations;
-using ServerSync;
 using UnityEngine;
 using YamlDotNet.Serialization;
 
@@ -15,18 +16,47 @@ namespace ServerCharacters
 {
 	public static class ClientSide
 	{
-		private static bool serverCharacter = false;
+		public static bool serverCharacter = false;
 		private static bool currentlySaving = false;
 		private static bool forceSynchronousSaving = false;
 		private static bool acquireCharacterFromTemplate = false;
+		private static bool doEmergencyBackup = false;
+
+		private static PlayerSnapshot? playerSnapShotLast;
+		private static PlayerSnapshot? playerSnapShotNew;
+
+		private static byte[]? serverEncryptionKey;
+		private static long serverEncryptionTime;
 
 		private static string? connectionError;
+
+		[HarmonyPatch(typeof(PlayerProfile), nameof(PlayerProfile.SavePlayerData))]
+		private static class PatchPlayerProfilePlayerSave
+		{
+			[UsedImplicitly]
+			private static void Prefix()
+			{
+				if (serverCharacter && doEmergencyBackup && playerSnapShotLast != null && Player.m_localPlayer is Player player)
+				{
+					player.m_inventory.m_inventory = playerSnapShotLast.inventory;
+					player.m_knownStations = playerSnapShotLast.knownStations;
+					player.m_knownTexts = playerSnapShotLast.knownTexts;
+				}
+			}
+		}
 
 		[HarmonyPatch(typeof(PlayerProfile), nameof(PlayerProfile.SavePlayerToDisk))]
 		private static class PatchPlayerProfileSave_Client
 		{
-			private static byte[] SaveCharacterToServer(byte[] packageArray)
+			private static byte[] SaveCharacterToServer(byte[] packageArray, PlayerProfile profile)
 			{
+				if (serverCharacter && doEmergencyBackup && serverEncryptionKey != null)
+				{
+					File.WriteAllBytes(global::Utils.GetSaveDataPath() + "/characters/" + profile.m_filename + ".fch.signature", generateProfileSignature(packageArray, serverEncryptionKey));
+					File.WriteAllBytes(global::Utils.GetSaveDataPath() + "/characters/" + profile.m_filename + ".fch.serverbackup", packageArray);
+					doEmergencyBackup = false;
+				}
+
 				if (!serverCharacter || currentlySaving || ZNet.instance?.GetServerPeer()?.IsReady() != true)
 				{
 					return packageArray;
@@ -34,7 +64,7 @@ namespace ServerCharacters
 
 				IEnumerator saveAsync()
 				{
-					foreach (bool sending in Shared.sendProfileToPeer(ZNet.instance.GetServerPeer(), packageArray))
+					foreach (bool sending in Shared.sendCompressedDataToPeer(ZNet.instance.GetServerPeer(), "ServerCharacters PlayerProfile", packageArray))
 					{
 						if (!sending)
 						{
@@ -46,7 +76,7 @@ namespace ServerCharacters
 				}
 				if (forceSynchronousSaving)
 				{
-					foreach (bool sending in Shared.sendProfileToPeer(ZNet.instance.GetServerPeer(), packageArray))
+					foreach (bool sending in Shared.sendCompressedDataToPeer(ZNet.instance.GetServerPeer(), "ServerCharacters PlayerProfile", packageArray))
 					{
 						if (!sending)
 						{
@@ -71,7 +101,7 @@ namespace ServerCharacters
 			{
 				return new CodeMatcher(instructions)
 					.MatchForward(false, new CodeMatch(new CodeInstruction(OpCodes.Callvirt, ArrayWriter))) // it writes the array first, then the hash
-					.Insert(new CodeInstruction(OpCodes.Call, ServerCharacterSaver))
+					.Insert(new CodeInstruction(OpCodes.Ldarg_0), new CodeInstruction(OpCodes.Call, ServerCharacterSaver))
 					.Instructions();
 			}
 		}
@@ -135,7 +165,27 @@ namespace ServerCharacters
 			{
 				if (!ZNet.instance.IsServer())
 				{
-					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveProfileFromPeer(onReceivedProfile));
+					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveCompressedFromPeer(onReceivedProfile));
+					peer.m_rpc.Register<ZPackage>("ServerCharacters KeyExchange", receiveEncryptionKeyFromServer);
+
+					string signatureFilePath = global::Utils.GetSaveDataPath() + "/characters/" + Game.instance.m_playerProfile.m_filename + ".fch.signature";
+					string backupFilePath = global::Utils.GetSaveDataPath() + "/characters/" + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
+
+					if (File.Exists(signatureFilePath) && File.Exists(backupFilePath))
+					{
+						Utils.Log($"Found emergency backup and signature for character '{Game.instance.m_playerProfile.m_filename}'. Trying to restore the backup.");
+
+						ZPackage package = new();
+						package.Write(File.ReadAllBytes(backupFilePath));
+						package.Write(File.ReadAllBytes(signatureFilePath));
+						foreach (bool sending in Shared.sendCompressedDataToPeer(peer, "ServerCharacters CheckSignature", package.GetArray()))
+						{
+							if (!sending)
+							{
+								Thread.Sleep(10); // busy loop, force waiting before continuing...
+							}
+						}
+					}
 				}
 			}
 
@@ -171,9 +221,17 @@ namespace ServerCharacters
 
 				profile.m_filename = Game.instance.m_playerProfile.m_filename;
 				Game.instance.m_playerProfile = profile;
+
+				string signatureFilePath = global::Utils.GetSaveDataPath() + "/characters/" + Game.instance.m_playerProfile.m_filename + ".fch.signature";
+				string backupFilePath = global::Utils.GetSaveDataPath() + "/characters/" + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
+
+				File.Delete(signatureFilePath);
+				File.Delete(backupFilePath);
+
+				Utils.Log($"Deleted emergency backup from {backupFilePath}");
 			}
 		}
-		
+
 		[HarmonyPatch(typeof(Game), nameof(Game.SpawnPlayer))]
 		private class InitializePlayerFromTemplate
 		{
@@ -185,7 +243,7 @@ namespace ServerCharacters
 					return;
 				}
 				acquireCharacterFromTemplate = false;
-				
+
 				try
 				{
 					PlayerTemplate? template = new DeserializerBuilder().IgnoreFields().Build().Deserialize<PlayerTemplate?>(ServerCharacters.playerTemplate.Value);
@@ -193,7 +251,7 @@ namespace ServerCharacters
 					{
 						return;
 					}
-					
+
 					foreach (Skills.SkillDef skill in Player.m_localPlayer.GetSkills().m_skills)
 					{
 						if (template.skills.TryGetValue(skill.m_skill.ToString(), out float skillValue))
@@ -219,8 +277,10 @@ namespace ServerCharacters
 					{
 						Player.m_localPlayer.transform.position = new Vector3(spawnPos.x, spawnPos.y, spawnPos.z);
 					}
-
-				} catch (SerializationException) {}
+				}
+				catch (SerializationException)
+				{
+				}
 			}
 		}
 
@@ -272,6 +332,71 @@ namespace ServerCharacters
 			private static void Prefix()
 			{
 				forceSynchronousSaving = true;
+			}
+		}
+
+		private static byte[] generateProfileSignature(byte[] profileData, byte[] key)
+		{
+			byte[] profileHash = SHA512.Create().ComputeHash(profileData);
+
+			Aes aes = Aes.Create();
+			aes.Key = key;
+			MemoryStream outputStream = new();
+			CryptoStream cryptoStream = new(outputStream, aes.CreateEncryptor(), CryptoStreamMode.Write);
+			cryptoStream.Write(profileHash, 0, profileHash.Length);
+			cryptoStream.FlushFinalBlock();
+			cryptoStream.Close();
+
+			ZPackage package = new();
+			package.Write(outputStream.ToArray());
+			package.Write(aes.IV);
+			package.Write(serverEncryptionTime);
+
+			return package.GetArray();
+		}
+
+		private static void receiveEncryptionKeyFromServer(ZRpc peerRpc, ZPackage keyPackage)
+		{
+			serverEncryptionKey = keyPackage.ReadByteArray();
+			serverEncryptionTime = keyPackage.ReadLong();
+		}
+
+		[HarmonyPatch(typeof(Game), nameof(Game.Logout))]
+		private class PatchGameLogout
+		{
+			[UsedImplicitly]
+			private static void Prefix()
+			{
+				doEmergencyBackup = ZNet.GetConnectionStatus() != ZNet.ConnectionStatus.Connecting && ZNet.GetConnectionStatus() != ZNet.ConnectionStatus.Connected && !Game.instance.IsShuttingDown();
+				if (doEmergencyBackup)
+				{
+					Utils.Log("Lost connection to the server. Preparing for emergency backup of profile data.");
+				}
+			}
+		}
+
+		private class PlayerSnapshot
+		{
+			public List<ItemDrop.ItemData> inventory = null!;
+			public Dictionary<string, int> knownStations = null!;
+			public Dictionary<string, string> knownTexts = null!;
+		}
+
+		public static void snapShotProfile()
+		{
+			if (ZNet.instance?.IsServer() == false && Player.m_localPlayer != null)
+			{
+				if (ZNet.instance.GetServerPing() < 1.5f)
+				{
+					playerSnapShotLast = playerSnapShotNew;
+				}
+
+				playerSnapShotNew = new PlayerSnapshot
+				{
+					inventory = Player.m_localPlayer.GetInventory().m_inventory.Select(d => d.Clone()).ToList(),
+					knownStations = Player.m_localPlayer.m_knownStations.ToDictionary(t => t.Key, t => t.Value),
+					knownTexts = Player.m_localPlayer.m_knownTexts.ToDictionary(t => t.Key, t => t.Value)
+				};
 			}
 		}
 	}

@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
+using BepInEx.Logging;
 using HarmonyLib;
 using ServerSync;
 using UnityEngine;
@@ -16,7 +17,8 @@ namespace ServerCharacters
 		private const string ModVersion = "1.0";
 		private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
-		private static ServerCharacters selfReference;
+		private static ServerCharacters selfReference = null!;
+		public static ManualLogSource logger => selfReference.Logger;
 
 		private float fixedUpdateCount = 0;
 		private int tickCount = int.MaxValue;
@@ -38,6 +40,7 @@ namespace ServerCharacters
 		private static ConfigEntry<string> maintenanceFinishedText = null!;
 		private static ConfigEntry<string> maintenanceAbortedText = null!;
 		private static ConfigEntry<string> maintenanceStartedText = null!;
+		public static ConfigEntry<string> serverKey = null!;
 
 		public static readonly CustomSyncedValue<string> playerTemplate = new(configSync, "PlayerTemplate", readCharacterTemplate());
 
@@ -76,6 +79,7 @@ namespace ServerCharacters
 			maintenanceFinishedText = config("1 - General", "Maintenance finished text", "Maintenance has been disabled and the server is back online. Have fun!", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'Off'. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
 			maintenanceAbortedText = config("1 - General", "Maintenance aborted text", "Maintenance has been aborted.", new ConfigDescription("Message to be posted to Discord, when the maintenance has been aborted. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
 			maintenanceStartedText = config("1 - General", "Maintenance started text", "Maintenance has started and players will be unable to connect.", new ConfigDescription("Message to be posted to Discord, when the maintenance has begun. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
+			serverKey = config("1 - General", "Server key", "", new ConfigDescription("DO NOT TOUCH THIS! DO NOT SHARE THIS! Encryption key used for emergency profile backups. DO NOT SHARE THIS! DO NOT TOUCH THIS!", null, new ConfigurationManagerAttributes()), false);
 
 			Assembly assembly = Assembly.GetExecutingAssembly();
 			Harmony harmony = new(ModGUID);
@@ -87,7 +91,7 @@ namespace ServerCharacters
 			maintenanceFileWatcher.IncludeSubdirectories = true;
 			maintenanceFileWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
 			maintenanceFileWatcher.EnableRaisingEvents = true;
-			
+
 			FileSystemWatcher characterTemplateWatcher = new(pluginDir, "CharacterTemplate.yml");
 			characterTemplateWatcher.Created += templateFileEvent;
 			characterTemplateWatcher.Changed += templateFileEvent;
@@ -96,6 +100,8 @@ namespace ServerCharacters
 			characterTemplateWatcher.IncludeSubdirectories = true;
 			characterTemplateWatcher.SynchronizingObject = ThreadingHelper.SynchronizingObject;
 			characterTemplateWatcher.EnableRaisingEvents = true;
+
+			ServerSide.generateServerKey();
 		}
 
 		private static void maintenanceFileEvent(object s, EventArgs e)
@@ -126,7 +132,7 @@ namespace ServerCharacters
 			{
 				string text = $"Maintenance mode enabled. All non-admins will be disconnected in {Utils.getHumanFriendlyTime(maintenanceTimer.Value)}.";
 				Player.m_localPlayer?.Message(MessageHud.MessageType.Center, text);
-				Log(text);
+				Utils.Log(text);
 
 				tickCount = maintenanceTimer.Value;
 
@@ -144,12 +150,12 @@ namespace ServerCharacters
 
 					Utils.PostToDiscord(tickCount <= maintenanceTimer.Value ? maintenanceAbortedText.Value : maintenanceFinishedText.Value);
 				}
-				
+
 				if (tickCount <= maintenanceTimer.Value)
 				{
 					const string text = "Maintenance aborted";
 					Player.m_localPlayer?.Message(MessageHud.MessageType.Center, text);
-					Log(text);
+					Utils.Log(text);
 
 					tickCount = int.MaxValue;
 				}
@@ -165,6 +171,11 @@ namespace ServerCharacters
 				return;
 			}
 
+			if (ZNet.instance?.IsServer() != true && ClientSide.serverCharacter)
+			{
+				ClientSide.snapShotProfile();
+			}
+			
 			if (tickCount <= 0)
 			{
 				if (ZNet.instance?.IsServer() == true)
@@ -174,12 +185,12 @@ namespace ServerCharacters
 						if (!ZNet.instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()))
 						{
 							ZNet.instance.InternalKick(peer);
-							Log($"disconnected client {peer.m_rpc.GetSocket().GetHostName()}");
+							Utils.Log($"Kicked non-admin client {peer.m_rpc.GetSocket().GetHostName()}, reason: Maintenance started.");
 						}
 					}
 
 					ZNet.instance.ConsoleSave();
-					Log("saved world");
+					Utils.Log("Maintenance started. World has been saved.");
 					Utils.PostToDiscord(maintenanceStartedText.Value);
 				}
 
@@ -190,10 +201,5 @@ namespace ServerCharacters
 			--tickCount;
 			++monotonicCounter;
 		}
-
-		public static void Log(string message)
-        {
-			selfReference.Logger.LogMessage(message);
-        }
 	}
 }

@@ -9,6 +9,7 @@ using HarmonyLib;
 using JetBrains.Annotations;
 using UnityEngine;
 using System.IO.Compression;
+using System.Security.Cryptography;
 
 namespace ServerCharacters
 {
@@ -17,6 +18,12 @@ namespace ServerCharacters
 		[HarmonyPatch(typeof(ZNet), nameof(ZNet.OnNewConnection))]
 		private static class PatchZNetOnNewConnection
 		{
+			private static byte[] deriveKey(long time)
+			{
+				Rfc2898DeriveBytes encryptionKey = new(ServerCharacters.serverKey.Value, BitConverter.GetBytes(time), 1000);
+				return encryptionKey.GetBytes(32);
+			}
+
 			[UsedImplicitly]
 			private static void Postfix(ZNet __instance, ZNetPeer peer)
 			{
@@ -25,11 +32,19 @@ namespace ServerCharacters
 					if (ServerCharacters.maintenanceMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()))
 					{
 						peer.m_rpc.Invoke("Error", ServerCharacters.MaintenanceDisconnectMagic);
-						ServerCharacters.Log($"client {peer.m_rpc.GetSocket().GetHostName()} tried connecting " +
-							$"during maintencance and got revoked");
+						Utils.Log($"Non-admin client {peer.m_rpc.GetSocket().GetHostName()} tried to connect during maintenance and got disconnected");
 						__instance.Disconnect(peer);
 					}
-					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveProfileFromPeer(onReceivedProfile));
+					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveCompressedFromPeer(onReceivedProfile));
+					peer.m_rpc.Register("ServerCharacters CheckSignature", Shared.receiveCompressedFromPeer(onReceivedSignature));
+
+					long time = DateTime.Now.Ticks;
+					byte[] key = deriveKey(time);
+
+					ZPackage package = new();
+					package.Write(key);
+					package.Write(time);
+					peer.m_rpc.Invoke("ServerCharacters KeyExchange", package);
 				}
 			}
 
@@ -45,17 +60,81 @@ namespace ServerCharacters
 				{
 					peerRpc.Invoke("Error", ServerCharacters.CharacterNameDisconnectMagic);
 					ZNet.instance.Disconnect(ZNet.instance.GetPeer(peerRpc));
-					ServerCharacters.Log($"client {peerRpc.GetSocket().GetHostName()} with bad profile name" +
-						$" '{profile.GetName()}' tried connecting and got revoked");
+					Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to connect with a bad profile name '{profile.GetName()}' and got disconnected");
 					return;
 				}
 				profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
 				profile.SavePlayerToDisk();
-				ServerCharacters.Log($"saved player profile data for {profile.m_filename}");
+				Utils.Log($"Saved player profile data for {profile.m_filename}");
+			}
+
+			private static void onReceivedSignature(ZRpc peerRpc, byte[] signedProfile)
+			{
+				ZPackage signedProfilePackage = new(signedProfile);
+				byte[] profileData = signedProfilePackage.ReadByteArray();
+				byte[] signature = signedProfilePackage.ReadByteArray();
+
+				long profileSavedTicks = VerifySignature(profileData, signature);
+				if (profileSavedTicks <= 0)
+				{
+					Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an emergency backup, but signature was invalid. Skipping.");
+					return;
+				}
+
+				PlayerProfile profile = new();
+				if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.GetName()))
+				{
+					// invalid data ...
+					Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an emergency backup, but the profile data is corrupted.");
+					return;
+				}
+				profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
+
+				string profilePath = global::Utils.GetSaveDataPath() + "/characters/" + profile.m_filename + ".fch";
+				FileInfo profileFileInfo = new(profilePath);
+				if (!profileFileInfo.Exists)
+				{
+					Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an emergency backup for the character '{profile.m_filename}' that does not belong to this server. Skipping.");
+					return;
+				}
+
+				DateTime lastModification = profileFileInfo.LastWriteTime;
+				DateTime profileSavedTime = new(profileSavedTicks);
+				if (profileSavedTime <= lastModification)
+				{
+					// profile too old
+					Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an old emergency backup. Skipping.");
+					return;
+				}
+
+				profile.SavePlayerToDisk();
+				Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} succesfully restored an emergency backup for {profile.m_filename}.");
+			}
+
+			private static long VerifySignature(byte[] profileData, byte[] signature)
+			{
+				byte[] profileHash = SHA512.Create().ComputeHash(profileData);
+
+				ZPackage package = new(signature);
+				byte[] encryptedHash = package.ReadByteArray();
+				byte[] iv = package.ReadByteArray();
+				long time = package.ReadLong();
+				byte[] key = deriveKey(time);
+
+				Aes aes = Aes.Create();
+				aes.Key = key;
+				aes.IV = iv;
+				MemoryStream inputStream = new(encryptedHash);
+				CryptoStream cryptoStream = new(inputStream, aes.CreateDecryptor(), CryptoStreamMode.Read);
+				MemoryStream outputStream = new();
+				cryptoStream.CopyTo(outputStream);
+				byte[] decryptedHash = outputStream.ToArray();
+
+				return profileHash.SequenceEqual(decryptedHash) ? time : 0;
 			}
 		}
 
-		[HarmonyPatch(typeof(ZNet), "RPC_PeerInfo")]
+		[HarmonyPatch(typeof(ZNet), nameof(ZNet.RPC_PeerInfo))]
 		private class SendConfigsAfterLogin
 		{
 			private class BufferingSocket : ISocket
@@ -124,7 +203,7 @@ namespace ServerCharacters
 					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName);
 					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? new byte[0];
 
-					foreach (bool sending in Shared.sendProfileToPeer(peer, playerProfileData))
+					foreach (bool sending in Shared.sendCompressedDataToPeer(peer, "ServerCharacters PlayerProfile", playerProfileData))
 					{
 						if (!sending)
 						{
@@ -219,9 +298,21 @@ namespace ServerCharacters
 
 						string fileName = __instance.m_filename + "-" + DateTime.Now.ToString("yyyy-MM-ddTHH-mm-ss") + ".fch";
 						archive.CreateEntryFromFile(saveFile, fileName);
-						ServerCharacters.Log($"stored backup file '{fileName}'");
+						Utils.Log($"Backed up a player profile in '{fileName}'");
 					}
 				}
+			}
+		}
+
+		public static void generateServerKey()
+		{
+			if (ServerCharacters.serverKey.Value == "")
+			{
+				byte[] key = new byte[32];
+				using RNGCryptoServiceProvider rngCsp = new();
+				rngCsp.GetBytes(key);
+
+				ServerCharacters.serverKey.Value = Convert.ToBase64String(key);
 			}
 		}
 	}

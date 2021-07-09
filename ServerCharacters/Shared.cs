@@ -15,7 +15,7 @@ namespace ServerCharacters
 	{
 		private static long packageCounter = 1;
 
-		public static IEnumerable<bool> sendProfileToPeer(ZNetPeer peer, byte[] packageArray)
+		public static IEnumerable<bool> sendCompressedDataToPeer(ZNetPeer peer, string eventname, byte[] packageArray)
 		{
 			MemoryStream output = new();
 			using (DeflateStream deflateStream = new(output, CompressionLevel.Optimal))
@@ -34,7 +34,7 @@ namespace ServerCharacters
 				{
 					if (Time.time > timeout)
 					{
-						Debug.Log($"Disconnecting {peer.m_uid}. Profile sending timed out after 30 seconds.");
+						Utils.Log($"Disconnecting {peer.m_uid}. Compressed data sending for event '{eventname}' timed out after 30 seconds.");
 						peer.m_rpc.Invoke("Error", ZNet.ConnectionStatus.ErrorConnectFailed);
 						ZNet.instance.Disconnect(peer);
 						yield break;
@@ -46,7 +46,7 @@ namespace ServerCharacters
 
 			void SendPackage(ZPackage pkg)
 			{
-				peer.m_rpc.Invoke("ServerCharacters PlayerProfile", pkg);
+				peer.m_rpc.Invoke(eventname, pkg);
 			}
 
 			int fragments = (int)(1 + (data.LongLength - 1) / packageSliceSize);
@@ -80,7 +80,7 @@ namespace ServerCharacters
 		private static readonly Dictionary<string, SortedDictionary<int, byte[]>> profileCache = new();
 		private static readonly List<KeyValuePair<long, string>> cacheExpirations = new(); // avoid leaking memory
 
-		public static Action<ZRpc, ZPackage> receiveProfileFromPeer(Action<ZRpc, byte[]> onReceived) => (sender, package) =>
+		public static Action<ZRpc, ZPackage> receiveCompressedFromPeer(Action<ZRpc, byte[]> onReceived) => (sender, package) =>
 		{
 			cacheExpirations.RemoveAll(kv =>
 			{
@@ -172,7 +172,7 @@ namespace ServerCharacters
 				pkg.SetPos(0);
 			}
 		}
-		
+
 		[HarmonyPatch(typeof(Game), nameof(Game.UpdateSaving))]
 		private static class PatchGameUpdateSaving
 		{
