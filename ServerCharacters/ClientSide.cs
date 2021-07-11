@@ -263,14 +263,7 @@ namespace ServerCharacters
 					Inventory inventory = Player.m_localPlayer.m_inventory;
 					foreach (KeyValuePair<string, int> item in template.items)
 					{
-						GameObject itemPrefab = ObjectDB.instance.GetItemPrefab(item.Key);
-						if (itemPrefab)
-						{
-							ItemDrop.ItemData itemData = itemPrefab.GetComponent<ItemDrop>().m_itemData.Clone();
-							itemData.m_stack = item.Value;
-							itemData.m_durability = itemData.GetMaxDurability();
-							inventory.AddItem(itemData);
-						}
+						inventory.AddItem(item.Key, item.Value, 1, 0, 0, "");
 					}
 
 					if (template.spawn is PlayerTemplate.Position spawnPos)
