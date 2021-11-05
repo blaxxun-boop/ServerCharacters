@@ -5,6 +5,7 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
+using JetBrains.Annotations;
 using ServerSync;
 using UnityEngine;
 
@@ -14,22 +15,24 @@ namespace ServerCharacters
 	public class ServerCharacters : BaseUnityPlugin
 	{
 		private const string ModName = "Server Characters";
-		private const string ModVersion = "1.0";
+		private const string ModVersion = "1.1";
 		private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
-		private static ServerCharacters selfReference = null!;
+		public static ServerCharacters selfReference = null!;
 		public static ManualLogSource logger => selfReference.Logger;
 
 		private float fixedUpdateCount = 0;
-		private int tickCount = int.MaxValue;
+		public int tickCount = int.MaxValue;
 		public static int monotonicCounter = 0;
 
 		public const int MaintenanceDisconnectMagic = 987345987;
 		public const int CharacterNameDisconnectMagic = 498209834;
+		public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-		private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName };
+		private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = ModVersion };
 
 		private static ConfigEntry<Toggle> serverConfigLocked = null!;
+		public static ConfigEntry<Toggle> singleCharacterMode = null!;
 		public static ConfigEntry<Toggle> maintenanceMode = null!;
 		private static ConfigEntry<int> maintenanceTimer = null!;
 		public static ConfigEntry<int> backupsToKeep = null!;
@@ -41,6 +44,7 @@ namespace ServerCharacters
 		private static ConfigEntry<string> maintenanceAbortedText = null!;
 		private static ConfigEntry<string> maintenanceStartedText = null!;
 		public static ConfigEntry<string> serverKey = null!;
+		public static ConfigEntry<string> serverListenAddress = null!;
 
 		public static readonly CustomSyncedValue<string> playerTemplate = new(configSync, "PlayerTemplate", readCharacterTemplate());
 
@@ -60,6 +64,7 @@ namespace ServerCharacters
 
 		private class ConfigurationManagerAttributes
 		{
+			[UsedImplicitly]
 			public bool? Browsable = false;
 		}
 
@@ -71,6 +76,7 @@ namespace ServerCharacters
 			maintenanceMode = config("1 - General", "Maintenance Mode", Toggle.Off, "If set to on, a timer will start. If the timer elapses, all non-admins will be disconnected, the world will be saved and only admins will be able to connect to the server, until maintenance mode is toggled to off.");
 			maintenanceMode.SettingChanged += toggleMaintenanceMode;
 			maintenanceTimer = config("1 - General", "Maintenance Timer", 300, new ConfigDescription("Time in seconds that has to pass, before the maintenance mode becomes active.", new AcceptableValueRange<int>(10, 1800)));
+			singleCharacterMode = config("1 - General", "Single Character Mode", Toggle.Off, "If set to on, each SteamID can create one character only on this server. Has no effect for admins.");
 			backupsToKeep = config("1 - General", "Number of backups to keep", 5, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(0, 15)));
 			autoSaveInterval = config("1 - General", "Auto save interval", 20, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 30)));
 			webhookURL = config("1 - General", "Discord Webhook URL", "", new ConfigDescription("Discord API endpoint to announce maintenance.", null, new ConfigurationManagerAttributes()), false);
@@ -80,6 +86,7 @@ namespace ServerCharacters
 			maintenanceAbortedText = config("1 - General", "Maintenance aborted text", "Maintenance has been aborted.", new ConfigDescription("Message to be posted to Discord, when the maintenance has been aborted. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
 			maintenanceStartedText = config("1 - General", "Maintenance started text", "Maintenance has started and players will be unable to connect.", new ConfigDescription("Message to be posted to Discord, when the maintenance has begun. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
 			serverKey = config("1 - General", "Server key", "", new ConfigDescription("DO NOT TOUCH THIS! DO NOT SHARE THIS! Encryption key used for emergency profile backups. DO NOT SHARE THIS! DO NOT TOUCH THIS!", null, new ConfigurationManagerAttributes()), false);
+			serverListenAddress = config("1 - General", "Webinterface listen address", "127.0.0.1:5982", new ConfigDescription("The address the webinterface API should listen on. Clear this value, if you don't use the webinterface.", null, new ConfigurationManagerAttributes()), false);
 
 			Assembly assembly = Assembly.GetExecutingAssembly();
 			Harmony harmony = new(ModGUID);
@@ -102,6 +109,27 @@ namespace ServerCharacters
 			characterTemplateWatcher.EnableRaisingEvents = true;
 
 			ServerSide.generateServerKey();
+
+			if (!serverListenAddress.Value.IsNullOrWhiteSpace())
+			{
+				WebInterfaceAPI.StartServer();
+			}
+
+			foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
+			{
+				FileInfo file = new(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + s);
+				if (file.Name.Contains("_") && file.Name.EndsWith(".fch", StringComparison.Ordinal))
+				{
+					Utils.ProfileName profileName = new();
+
+					string[] parts = file.Name.Split('_');
+					profileName.id = parts[0];
+					profileName.name = parts[1].Split('.')[0];
+					PlayerProfile profile = new(file.Name.Replace(".fch", ""));
+					profile.Load();
+					Utils.Cache.profiles[profileName] = profile;
+				}
+			}
 		}
 
 		private static void maintenanceFileEvent(object s, EventArgs e)
@@ -136,6 +164,8 @@ namespace ServerCharacters
 
 				tickCount = maintenanceTimer.Value;
 
+				WebInterfaceAPI.SendMaintenanceMessage(new Maintenance { startTime = DateTimeOffset.Now.ToUnixTimeSeconds() + tickCount, maintenanceActive = false });
+
 				if (configSync.IsSourceOfTruth)
 				{
 					File.Create(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
@@ -147,8 +177,8 @@ namespace ServerCharacters
 				if (configSync.IsSourceOfTruth)
 				{
 					File.Delete(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
-
 					Utils.PostToDiscord(tickCount <= maintenanceTimer.Value ? maintenanceAbortedText.Value : maintenanceFinishedText.Value);
+					WebInterfaceAPI.SendMaintenanceMessage(new Maintenance { startTime = 0, maintenanceActive = false });
 				}
 
 				if (tickCount <= maintenanceTimer.Value)
@@ -175,7 +205,7 @@ namespace ServerCharacters
 			{
 				ClientSide.snapShotProfile();
 			}
-			
+
 			if (tickCount <= 0)
 			{
 				if (ZNet.instance?.IsServer() == true)
@@ -192,6 +222,7 @@ namespace ServerCharacters
 					ZNet.instance.ConsoleSave();
 					Utils.Log("Maintenance started. World has been saved.");
 					Utils.PostToDiscord(maintenanceStartedText.Value);
+					WebInterfaceAPI.SendMaintenanceMessage(new Maintenance { startTime = DateTimeOffset.Now.ToUnixTimeSeconds(), maintenanceActive = true });
 				}
 
 				tickCount = int.MaxValue;

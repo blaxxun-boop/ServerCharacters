@@ -1,0 +1,64 @@
+﻿syntax = "proto3";
+package LinuxServerWebInterface;
+
+option csharp_namespace = "ServerCharacters";
+option php_namespace = "ValheimServerUI\\Proto";
+
+message WebinterfacePlayer {
+  string id = 1;
+  string name = 2;
+
+  message Statistics {
+    int64 lastTouch = 1;
+    int32 kills = 2;
+    int32 deaths = 3;
+    int32 crafts = 4;
+    int32 builds = 5;
+  }
+
+  Statistics statistics = 3;
+
+  message Position {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+  }
+
+  Position position = 4;
+}
+
+message PlayerList {
+  repeated WebinterfacePlayer playerList = 1;
+}
+
+message WebinterfaceMod {
+  string guid = 1;
+  string name = 2;
+  string version = 3;
+  int64 lastUpdate = 4;
+  string modPath = 5;
+  string configPath = 6; 
+}
+
+message ModList {
+  repeated WebinterfaceMod modList = 1;
+}
+
+message ServerConfig {
+  string serverName = 1;
+  int32 processId = 2;
+  string pluginsPath = 3;
+  string patchersPath = 4;
+  string configPath = 5;
+  string savePath = 6;
+}
+
+message Maintenance {
+  int64 startTime = 1;
+  bool maintenanceActive = 2;
+}
+
+message IngameMessage {
+  repeated string steamId = 1;
+  string message = 2;
+}

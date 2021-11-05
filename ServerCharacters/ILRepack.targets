@@ -8,6 +8,12 @@
             <InputAssemblies Include="Libs\System.IO.Compression.dll" />
             <InputAssemblies Include="Libs\System.IO.Compression.FileSystem.dll" />
             <InputAssemblies Include="Libs\System.IO.Compression.ZipFile.dll" />
+            <InputAssemblies Include="Libs\System.Buffers.dll" />
+            <InputAssemblies Include="Libs\System.Memory.dll" />
+            <InputAssemblies Include="Libs\System.Collections.Immutable.dll" />
+            <InputAssemblies Include="Libs\System.Runtime.CompilerServices.Unsafe.dll" />
+            <InputAssemblies Include="$(OutputPath)\protobuf-net.dll" />
+            <InputAssemblies Include="$(OutputPath)\protobuf-net.Core.dll" />
         </ItemGroup>
         <ILRepack Parallel="true" DebugInfo="true" Internalize="true" InputAssemblies="@(InputAssemblies)" OutputFile="$(TargetPath)" TargetKind="SameAsPrimaryAssembly" LibraryPath="$(OutputPath)" />
     </Target>

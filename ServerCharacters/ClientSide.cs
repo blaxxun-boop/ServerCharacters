@@ -52,8 +52,8 @@ namespace ServerCharacters
 			{
 				if (serverCharacter && doEmergencyBackup && serverEncryptionKey != null)
 				{
-					File.WriteAllBytes(global::Utils.GetSaveDataPath() + "/characters/" + profile.m_filename + ".fch.signature", generateProfileSignature(packageArray, serverEncryptionKey));
-					File.WriteAllBytes(global::Utils.GetSaveDataPath() + "/characters/" + profile.m_filename + ".fch.serverbackup", packageArray);
+					File.WriteAllBytes(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + profile.m_filename + ".fch.signature", generateProfileSignature(packageArray, serverEncryptionKey));
+					File.WriteAllBytes(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + profile.m_filename + ".fch.serverbackup", packageArray);
 					doEmergencyBackup = false;
 				}
 
@@ -167,9 +167,11 @@ namespace ServerCharacters
 				{
 					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveCompressedFromPeer(onReceivedProfile));
 					peer.m_rpc.Register<ZPackage>("ServerCharacters KeyExchange", receiveEncryptionKeyFromServer);
+					peer.m_rpc.Register<string>("ServerCharacters IngameMessage", onReceivedIngameMessage);
+					peer.m_rpc.Register<string>("ServerCharacters KickMessage", onReceivedKickMessage);
 
-					string signatureFilePath = global::Utils.GetSaveDataPath() + "/characters/" + Game.instance.m_playerProfile.m_filename + ".fch.signature";
-					string backupFilePath = global::Utils.GetSaveDataPath() + "/characters/" + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
+					string signatureFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
+					string backupFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
 
 					if (File.Exists(signatureFilePath) && File.Exists(backupFilePath))
 					{
@@ -187,6 +189,18 @@ namespace ServerCharacters
 						}
 					}
 				}
+			}
+
+			private static void onReceivedIngameMessage(ZRpc peerRpc, string message)
+			{
+				Chat.instance.AddString(message);
+				Chat.instance.m_hideTimer = 0f;
+				MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, message);
+			}
+			
+			private static void onReceivedKickMessage(ZRpc peerRpc, string message)
+			{
+				connectionError = message;
 			}
 
 			private static void onReceivedProfile(ZRpc peerRpc, byte[] profileData)
@@ -222,13 +236,15 @@ namespace ServerCharacters
 				profile.m_filename = Game.instance.m_playerProfile.m_filename;
 				Game.instance.m_playerProfile = profile;
 
-				string signatureFilePath = global::Utils.GetSaveDataPath() + "/characters/" + Game.instance.m_playerProfile.m_filename + ".fch.signature";
-				string backupFilePath = global::Utils.GetSaveDataPath() + "/characters/" + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
+				string signatureFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
+				string backupFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
 
-				File.Delete(signatureFilePath);
-				File.Delete(backupFilePath);
-
-				Utils.Log($"Deleted emergency backup from {backupFilePath}");
+				if (File.Exists(backupFilePath) && File.Exists(signatureFilePath))
+				{
+					File.Delete(signatureFilePath);
+					File.Delete(backupFilePath);
+					Utils.Log($"Deleted emergency backup from {backupFilePath}");
+				}
 			}
 		}
 
@@ -289,6 +305,10 @@ namespace ServerCharacters
 				if ((int)ZNet.GetConnectionStatus() == ServerCharacters.CharacterNameDisconnectMagic)
 				{
 					__instance.m_connectionFailedError.text = "Your character name contains illegal characters. Please choose a different name.";
+				}
+				if ((int)ZNet.GetConnectionStatus() == ServerCharacters.SingleCharacterModeDisconnectMagic)
+				{
+					__instance.m_connectionFailedError.text = "You are not allowed to create more than one character on this server.";
 				}
 				if (__instance.m_connectionFailedPanel.activeSelf && connectionError != null)
 				{
@@ -390,6 +410,30 @@ namespace ServerCharacters
 					knownStations = Player.m_localPlayer.m_knownStations.ToDictionary(t => t.Key, t => t.Value),
 					knownTexts = Player.m_localPlayer.m_knownTexts.ToDictionary(t => t.Key, t => t.Value)
 				};
+			}
+		}
+
+		[HarmonyPatch(typeof(Inventory), nameof(Inventory.Changed))]
+		private class PatchInventoryChanged
+		{
+			private static void Prefix(Inventory __instance)
+			{
+				if (__instance == Player.m_localPlayer?.m_inventory && ZNet.instance.GetServerPeer() is ZNetPeer serverPeer)
+				{
+					ZPackage inventoryPackage = new();
+					__instance.Save(inventoryPackage);
+					IEnumerator saveAsync()
+					{
+						foreach (bool sending in Shared.sendCompressedDataToPeer(serverPeer, "ServerCharacters PlayerInventory", inventoryPackage.GetArray()))
+						{
+							if (!sending)
+							{
+								yield return null;
+							}
+						}
+					}
+					ZNet.instance.StartCoroutine(saveAsync());
+				}
 			}
 		}
 	}

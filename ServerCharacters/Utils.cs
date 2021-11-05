@@ -1,7 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using BepInEx.Configuration;
+using JetBrains.Annotations;
+using UnityEngine;
 
 namespace ServerCharacters
 {
@@ -43,6 +47,59 @@ namespace ServerCharacters
 		public static void Log(string message)
 		{
 			ServerCharacters.logger.LogMessage(message);
+		}
+
+		public struct ProfileName
+		{
+			[UsedImplicitly] public string id;
+			[UsedImplicitly] public string name;
+
+			public static ProfileName fromPeer(ZNetPeer peer) => new() { id = peer.m_socket.GetHostName(), name = peer.m_playerName };
+		}
+
+		public static class Cache
+		{
+			public static readonly Dictionary<ProfileName, PlayerProfile> profiles = new();
+		}
+
+		public static PlayerList GetPlayerListFromFiles()
+		{
+			PlayerList playerList = new();
+			Dictionary<ProfileName, ZNet.PlayerInfo> playerInfos = ZNet.m_instance.m_players.ToDictionary(p => new ProfileName { id = p.m_host, name = p.m_name }, p => p);
+			foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
+			{
+				FileInfo file = new(s);
+				if (file.Name.Contains("_") && file.Name.EndsWith(".fch", StringComparison.Ordinal))
+				{
+					WebinterfacePlayer player = new();
+
+					string[] parts = file.Name.Split('_');
+					player.Id = parts[0];
+					player.Name = parts[1].Split('.')[0];
+					ProfileName profileName = new() { id = player.Id, name = player.Name };
+					bool loggedIn = playerInfos.TryGetValue(profileName, out ZNet.PlayerInfo playerInfo);
+					PlayerProfile profile = Cache.profiles[profileName];
+					player.statistics = new WebinterfacePlayer.Statistics
+					{
+						lastTouch = loggedIn ? 0 : ((DateTimeOffset)file.LastWriteTimeUtc).ToUnixTimeSeconds(),
+						Kills = profile.m_playerStats.m_kills,
+						Deaths = profile.m_playerStats.m_deaths,
+						Crafts = profile.m_playerStats.m_crafts,
+						Builds = profile.m_playerStats.m_builds
+					};
+					Vector3 position = loggedIn ? ZNet.instance.GetPeerByHostName(playerInfo.m_host).m_refPos : profile.GetLogoutPoint();
+					player.position = new WebinterfacePlayer.Position
+					{
+						X = position.x,
+						Y = position.y,
+						Z = position.z
+					};
+
+					playerList.playerLists.Add(player);
+				}
+			}
+			
+			return playerList;
 		}
 	}
 }
