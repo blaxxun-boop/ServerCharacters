@@ -161,8 +161,11 @@ namespace ServerCharacters
 					PlayerProfile playerProfile = new(profileName.id + "_" + profileName.name);
 					if (playerProfile.LoadPlayerFromDisk())
 					{
+						FileInfo profileFile = new(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + playerProfile.GetFilename() + ".fch");
+						DateTime originalWriteTime = profileFile.LastWriteTime;
 						PatchPlayerProfile(playerProfile, inventoryData);
 						playerProfile.SavePlayerToDisk();
+						File.SetLastWriteTime(profileFile.FullName, originalWriteTime);
 					}
 				}
 

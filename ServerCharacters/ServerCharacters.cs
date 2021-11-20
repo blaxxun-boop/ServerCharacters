@@ -15,7 +15,7 @@ namespace ServerCharacters
 	public class ServerCharacters : BaseUnityPlugin
 	{
 		private const string ModName = "Server Characters";
-		private const string ModVersion = "1.1";
+		private const string ModVersion = "1.1.1";
 		private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 		public static ServerCharacters selfReference = null!;
@@ -29,7 +29,7 @@ namespace ServerCharacters
 		public const int CharacterNameDisconnectMagic = 498209834;
 		public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-		private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = ModVersion };
+		private static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.1" };
 
 		private static ConfigEntry<Toggle> serverConfigLocked = null!;
 		public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -114,6 +114,8 @@ namespace ServerCharacters
 			{
 				WebInterfaceAPI.StartServer();
 			}
+
+			Directory.CreateDirectory(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters");
 
 			foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
 			{
