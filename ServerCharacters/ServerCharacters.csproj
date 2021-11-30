@@ -60,7 +60,7 @@
             <HintPath>$(GamePath)\valheim_Data\Managed\publicized_assemblies\assembly_guiutils_publicized.dll</HintPath>
         </Reference>
         <Reference Include="assembly_steamworks, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-          <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\publicized_assemblies\assembly_steamworks_publicized.dll</HintPath>
+          <HintPath>$(GamePath)\valheim_Data\Managed\publicized_assemblies\assembly_steamworks_publicized.dll</HintPath>
         </Reference>
         <Reference Include="assembly_utils, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
             <HintPath>$(GamePath)\valheim_Data\Managed\publicized_assemblies\assembly_utils_publicized.dll</HintPath>
