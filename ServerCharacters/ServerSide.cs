@@ -302,6 +302,12 @@ namespace ServerCharacters
 			[UsedImplicitly]
 			private static void Postfix(ZNet __instance, ZNetPeer peer)
 			{
+				if (!peer.m_socket.IsConnected())
+				{
+					__instance.Disconnect(peer);
+					return;
+				}
+				
 				int endTime = ServerCharacters.monotonicCounter + 30;
 				IEnumerator shutdownAfterSave()
 				{
