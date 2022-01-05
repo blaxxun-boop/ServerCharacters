@@ -38,7 +38,7 @@ namespace ServerCharacters
 						Utils.Log($"Non-admin client {peer.m_rpc.GetSocket().GetHostName()} tried to connect during maintenance and got disconnected");
 						__instance.Disconnect(peer);
 					}
-					
+
 					peer.m_rpc.Register("ServerCharacters PlayerProfile", Shared.receiveCompressedFromPeer(onReceivedProfile));
 					peer.m_rpc.Register("ServerCharacters CheckSignature", Shared.receiveCompressedFromPeer(onReceivedSignature));
 					peer.m_rpc.Register("ServerCharacters PlayerInventory", Shared.receiveCompressedFromPeer(onReceivedInventory));
@@ -157,7 +157,7 @@ namespace ServerCharacters
 				if (ZNet.instance?.IsServer() == true && peerProfileNameMap.TryGetValue(peer, out Utils.ProfileName profileName) && Inventories.TryGetValue(profileName, out byte[] inventoryData))
 				{
 					Inventories.Remove(profileName);
-					
+
 					PlayerProfile playerProfile = new(profileName.id + "_" + profileName.name);
 					if (playerProfile.LoadPlayerFromDisk())
 					{
@@ -236,14 +236,14 @@ namespace ServerCharacters
 				}
 
 				ZNetPeer peer = __instance.GetPeer(rpc);
-					
+
 				peerProfileNameMap[peer] = Utils.ProfileName.fromPeer(peer);
 
 				IEnumerator sendAsync()
 				{
 					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName);
 					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? Array.Empty<byte>();
-					
+
 					if (playerProfileData.Length == 0 && ServerCharacters.singleCharacterMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()) && Utils.GetPlayerListFromFiles().playerLists.Any(p => p.Id == peer.m_rpc.GetSocket().GetHostName()))
 					{
 						peer.m_rpc.Invoke("Error", ServerCharacters.SingleCharacterModeDisconnectMagic);
@@ -252,11 +252,14 @@ namespace ServerCharacters
 						yield break;
 					}
 
-					foreach (bool sending in Shared.sendCompressedDataToPeer(peer, "ServerCharacters PlayerProfile", playerProfileData))
+					if (!ServerCharacters.backupOnlyMode.GetToggle())
 					{
-						if (!sending)
+						foreach (bool sending in Shared.sendCompressedDataToPeer(peer, "ServerCharacters PlayerProfile", playerProfileData))
 						{
-							yield return null;
+							if (!sending)
+							{
+								yield return null;
+							}
 						}
 					}
 
@@ -307,7 +310,7 @@ namespace ServerCharacters
 					__instance.Disconnect(peer);
 					return;
 				}
-				
+
 				int endTime = ServerCharacters.monotonicCounter + 30;
 				IEnumerator shutdownAfterSave()
 				{
@@ -355,7 +358,7 @@ namespace ServerCharacters
 						archive.CreateEntryFromFile(saveFile, fileName);
 						Utils.Log($"Backed up a player profile in '{fileName}'");
 					}
-					
+
 					Utils.Cache.profiles[new Utils.ProfileName { id = __instance.m_filename.Split('_')[0], name = __instance.GetName() }] = __instance;
 				}
 			}
@@ -399,7 +402,7 @@ namespace ServerCharacters
 
 			profile.m_playerData = newData;
 		}
-		
+
 		public static void ConsumePlayerSaveUntilInventory(ZPackage pkg)
 		{
 			throw new NotImplementedException("Was not patched ...");

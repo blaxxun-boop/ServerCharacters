@@ -56,10 +56,22 @@ namespace ServerCharacters
 
 			public static ProfileName fromPeer(ZNetPeer peer) => new() { id = peer.m_socket.GetHostName(), name = peer.m_playerName };
 		}
-
+		
 		public static class Cache
 		{
 			public static readonly Dictionary<ProfileName, PlayerProfile> profiles = new();
+
+			public static PlayerProfile loadProfile(ProfileName name)
+			{
+				if (!profiles.TryGetValue(name, out PlayerProfile profile))
+				{
+					profile = new($"{name.id}_{name.name}");
+					profile.LoadPlayerFromDisk();
+					profiles[name] = profile;
+				}
+
+				return profile;
+			}
 		}
 
 		public static PlayerList GetPlayerListFromFiles()
@@ -78,7 +90,7 @@ namespace ServerCharacters
 					player.Name = parts[1].Split('.')[0];
 					ProfileName profileName = new() { id = player.Id, name = player.Name };
 					bool loggedIn = playerInfos.TryGetValue(profileName, out ZNet.PlayerInfo playerInfo);
-					PlayerProfile profile = Cache.profiles[profileName];
+					PlayerProfile profile = Cache.loadProfile(profileName);
 					player.statistics = new WebinterfacePlayer.Statistics
 					{
 						lastTouch = loggedIn ? 0 : ((DateTimeOffset)file.LastWriteTimeUtc).ToUnixTimeSeconds(),

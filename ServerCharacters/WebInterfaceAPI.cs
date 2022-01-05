@@ -174,7 +174,7 @@ namespace ServerCharacters
 
 			System.Console.Error.Write("WAPI got command: " + command);
 
-			if (typeof(Command).GetMethod(command) is MethodInfo method)
+			if (typeof(Command).GetMethod(command) is { } method)
 			{
 				System.Console.Error.Write("WAPI processing command: " + method);
 
