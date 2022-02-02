@@ -36,7 +36,7 @@ namespace ServerCharacters
 			[UsedImplicitly]
 			private static void Prefix()
 			{
-				if (serverCharacter && doEmergencyBackup && playerSnapShotLast != null && Player.m_localPlayer is Player player)
+				if (serverCharacter && doEmergencyBackup && playerSnapShotLast != null && Player.m_localPlayer is { } player)
 				{
 					player.m_inventory.m_inventory = playerSnapShotLast.inventory;
 					player.m_knownStations = playerSnapShotLast.knownStations;
@@ -254,7 +254,7 @@ namespace ServerCharacters
 			[UsedImplicitly]
 			private static void Postfix()
 			{
-				if (!acquireCharacterFromTemplate)
+				if (ServerCharacters.backupOnlyMode.GetToggle() ? Game.instance.GetPlayerProfile().HaveLogoutPoint() || Game.instance.GetPlayerProfile().HaveCustomSpawnPoint() : !acquireCharacterFromTemplate)
 				{
 					return;
 				}
@@ -282,7 +282,36 @@ namespace ServerCharacters
 						inventory.AddItem(item.Key, item.Value, 1, 0, 0, "");
 					}
 
-					if (template.spawn is PlayerTemplate.Position spawnPos)
+					if (template.spawn is { } spawnPos)
+					{
+						Player.m_localPlayer.transform.position = new Vector3(spawnPos.x, spawnPos.y, spawnPos.z);
+					}
+				}
+				catch (SerializationException)
+				{
+				}
+			}
+		}
+
+		[HarmonyPatch(typeof(Valkyrie), nameof(Valkyrie.Awake))]
+		private class ChangeValkyrieTarget
+		{
+			private static void Prefix(Valkyrie __instance)
+			{
+				if (!__instance.GetComponent<ZNetView>().IsOwner())
+				{
+					return;
+				}
+				
+				try
+				{
+					PlayerTemplate? template = new DeserializerBuilder().IgnoreFields().Build().Deserialize<PlayerTemplate?>(ServerCharacters.playerTemplate.Value);
+					if (template == null)
+					{
+						return;
+					}
+					
+					if (template.spawn is { } spawnPos)
 					{
 						Player.m_localPlayer.transform.position = new Vector3(spawnPos.x, spawnPos.y, spawnPos.z);
 					}
@@ -418,7 +447,7 @@ namespace ServerCharacters
 		{
 			private static void Prefix(Inventory __instance)
 			{
-				if (__instance == Player.m_localPlayer?.m_inventory && ZNet.instance.GetServerPeer() is ZNetPeer serverPeer)
+				if (__instance == Player.m_localPlayer?.m_inventory && ZNet.instance.GetServerPeer() is { } serverPeer)
 				{
 					ZPackage inventoryPackage = new();
 					__instance.Save(inventoryPackage);
