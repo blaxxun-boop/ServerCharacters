@@ -1,8 +1,7 @@
-﻿namespace ServerCharacters
+﻿namespace ServerCharacters;
+
+public enum Toggle
 {
-	public enum Toggle
-	{
-		On = 1,
-		Off = 0
-	}
+	On = 1,
+	Off = 0
 }
