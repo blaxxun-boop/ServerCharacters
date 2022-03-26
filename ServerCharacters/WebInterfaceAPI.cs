@@ -232,6 +232,21 @@ public static class WebInterfaceAPI
 		{
 			ExecuteOnMain(() => ZNet.instance.ConsoleSave());
 		}
+
+		public static void RaiseSkill(RaiseSkill data) => ExecuteOnMain(() =>
+		{
+			ServerSide.onRaiseSkill(null, data.skillName, data.Level, data.Name ?? "", data.Id ?? "0");
+		});
+
+		public static void ResetSkill(RaiseSkill data) => ExecuteOnMain(() =>
+		{
+			ServerSide.onResetSkill(null, data.skillName, data.Name ?? "", data.Id ?? "0");
+		});
+
+		public static void GiveItem(GiveItem data) => ExecuteOnMain(() =>
+		{
+			ServerSide.onGiveItem(null, data.itemName, data.itemQuantity, data.Name, data.Id ?? "0");
+		});
 	}
 
 	public static void SendMaintenanceMessage(Maintenance message) => Broadcast("MaintenanceMessage", message);

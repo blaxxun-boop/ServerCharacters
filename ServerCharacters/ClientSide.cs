@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,6 +8,7 @@ using System.Reflection.Emit;
 using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Threading.Tasks;
 using HarmonyLib;
 using JetBrains.Annotations;
 using UnityEngine;
@@ -30,6 +32,208 @@ public static class ClientSide
 	private static long serverEncryptionTime;
 
 	private static string? connectionError;
+
+	[HarmonyPatch(typeof(Skills), nameof(Skills.ResetSkill))]
+	public class SaveLastSkillReset
+	{
+		public static Skills.SkillType last = Skills.SkillType.All;
+
+		[UsedImplicitly]
+		public static void Finalizer(Skills.SkillType skillType) => last = skillType;
+	}
+
+	[HarmonyPatch(typeof(Console), nameof(Console.Print))]
+	public class SilenceConsole
+	{
+		public static bool silence = false;
+
+		[UsedImplicitly]
+		public static bool Prefix() => !silence;
+	}
+
+	private static TaskCompletionSource<Vector3>? awaitingPos = null;
+
+	[HarmonyPatch(typeof(Terminal), nameof(Terminal.InitTerminal))]
+	public class AddChatCommands
+	{
+		private static void Postfix()
+		{
+			_ = new Terminal.ConsoleCommand("ServerCharacters", "Manages the ServerCharacters commands.", (Terminal.ConsoleEvent)(args =>
+			{
+				if (!ServerCharacters.configSync.IsAdmin)
+				{
+					args.Context.AddString("You are not an admin on this server.");
+					return;
+				}
+
+				Skills.SkillType GetSkillType(string name)
+				{
+					Dictionary<Skills.SkillType, Skills.Skill> backup = Player.m_localPlayer.GetSkills().m_skillData.ToDictionary(kv => kv.Key, kv => new Skills.Skill(kv.Value.m_info) { m_accumulator = kv.Value.m_accumulator, m_level = kv.Value.m_level });
+
+					SaveLastSkillReset.last = Skills.SkillType.All;
+					try
+					{
+						SilenceConsole.silence = true;
+						Player.m_localPlayer.GetSkills().CheatResetSkill(name);
+					}
+					finally
+					{
+						SilenceConsole.silence = false;
+					}
+
+					Player.m_localPlayer.GetSkills().m_skillData = backup;
+
+					return SaveLastSkillReset.last;
+				}
+
+				if (args.Length >= 3 && args[1] == "resetskill")
+				{
+					Skills.SkillType skill = GetSkillType(args[2]);
+					if (skill == Skills.SkillType.All)
+					{
+						args.Context.AddString($"{args[2]} is not a valid skill.");
+						return;
+					}
+
+					if (args.Length > 3)
+					{
+						string name = args[3];
+						int lastArg = 4;
+						if (name.StartsWith("\""))
+						{
+							name = name.Substring(1);
+							while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
+							{
+								name += " " + args[lastArg++];
+							}
+							name = name.Substring(0, name.Length - 1);
+						}
+
+						ZNet.instance.GetServerPeer().m_rpc.Invoke("ServerCharacters ResetSkill", args[2], name, args.Length > lastArg ? args[lastArg] : "0");
+						args.Context.AddString($"{args[2]} has been reset for {name}.");
+					}
+					else
+					{
+						ZNet.instance.GetServerPeer().m_rpc.Invoke("ServerCharacters ResetSkill", args[2], "", "0");
+						args.Context.AddString($"{args[2]} has been reset for everyone.");
+					}
+
+					return;
+				}
+
+				if (args.Length >= 3 && args[1] == "raiseskill")
+				{
+					Skills.SkillType skill = GetSkillType(args[2]);
+					if (skill == Skills.SkillType.All)
+					{
+						args.Context.AddString($"{args[2]} is not a valid skill.");
+						return;
+					}
+
+					if (args.Length > 4)
+					{
+						string name = args[4];
+						int lastArg = 5;
+						if (name.StartsWith("\""))
+						{
+							name = name.Substring(1);
+							while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
+							{
+								name += " " + args[lastArg++];
+							}
+							name = name.Substring(0, name.Length - 1);
+						}
+
+						ZNet.instance.GetServerPeer().m_rpc.Invoke("ServerCharacters RaiseSkill", args[2], int.Parse(args[3]), name, args.Length > lastArg ? args[lastArg] : "0");
+						args.Context.AddString($"{args[2]} has been raised by {args[3]} for {name}.");
+					}
+					else
+					{
+						ZNet.instance.GetServerPeer().m_rpc.Invoke("ServerCharacters RaiseSkill", args[2], int.Parse(args[3]), "", "0");
+						args.Context.AddString($"{args[2]} has been raised by {args[3]} for everyone.");
+					}
+
+					return;
+				}
+
+				if (args.Length >= 3 && args[1] == "giveitem")
+				{
+					GameObject item = ObjectDB.instance.GetItemPrefab(args[2]);
+					if (item is null)
+					{
+						args.Context.AddString($"{args[2]} is not a valid item.");
+						return;
+					}
+
+					if (args.Length > 4)
+					{
+						string name = args[4];
+						int lastArg = 5;
+						if (name.StartsWith("\""))
+						{
+							name = name.Substring(1);
+							while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
+							{
+								name += " " + args[lastArg++];
+							}
+							name = name.Substring(0, name.Length - 1);
+						}
+
+						ZNet.instance.GetServerPeer().m_rpc.Invoke("ServerCharacters GiveItem", args[2], int.Parse(args[3]), name, args.Length > lastArg ? args[lastArg] : "0");
+						args.Context.AddString($"{args[3]}x {args[2]} has been given to {name}, if their inventory isn't full.");
+					}
+					else
+					{
+						args.Context.AddString($"Please specify a target player.");
+					}
+
+					return;
+				}
+
+				if (args.Length >= 3 && args[1] == "teleport")
+				{
+					string name = args[2];
+					int lastArg = 3;
+					if (name.StartsWith("\""))
+					{
+						name = name.Substring(1);
+						while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
+						{
+							name += " " + args[lastArg++];
+						}
+						name = name.Substring(0, name.Length - 1);
+					}
+
+					ZNet.instance.GetServerPeer().m_rpc.Invoke("ServerCharacters GetPlayerPos", name, args.Length > lastArg ? args[lastArg] : "0");
+
+					IEnumerator AwaitResponse()
+					{
+						awaitingPos = new TaskCompletionSource<Vector3>();
+						Task<Vector3> task = awaitingPos.Task;
+						yield return new WaitUntil(() => task.IsCompleted);
+
+						Vector3 pos = task.Result;
+						if (pos == Vector3.zero)
+						{
+							args.Context.AddString("A player with this name is not online.");
+						}
+						else
+						{
+							Player.m_localPlayer.TeleportTo(pos, Quaternion.identity, true);
+						}
+					}
+					ServerCharacters.selfReference.StartCoroutine(AwaitResponse());
+					return;
+				}
+
+				args.Context.AddString("ServerCharacters console commands - use 'ServerCharacters' followed by one of the following options.");
+				args.Context.AddString("resetskill [skillname] [playername] [steamid] - resets the skill for the specified player. Steam ID is optional and only required, if multiple players have the same name. If no name is provided, the skill is reset for every character on the server, online and offline.");
+				args.Context.AddString("raiseskill [skillname] [level] [playername] [steamid] - raises the skill for the specified player by the specified level. Steam ID is optional and only required, if multiple players have the same name. If no name is provided, the skill is raised for every character on the server, online and offline.");
+				args.Context.AddString("teleport [playername] [steamid] - teleports you to the specified player. Quote names with a space. Steam ID is optional and only required, if multiple players have the same name.");
+				args.Context.AddString("giveitem [itemname] [quantity] [playername] [steamid] - adds the specified item to the specified players inventory in the specified quantity. Quote names with a space. Steam ID is optional and only required, if multiple players have the same name. Will fail, if their inventory is full.");
+			}), optionsFetcher: () => new List<string> { "resetskill", "teleport", "raiseskill", "giveitem" });
+		}
+	}
 
 	[HarmonyPatch(typeof(PlayerProfile), nameof(PlayerProfile.SavePlayerData))]
 	private static class PatchPlayerProfilePlayerSave
@@ -170,6 +374,10 @@ public static class ClientSide
 				peer.m_rpc.Register<ZPackage>("ServerCharacters KeyExchange", receiveEncryptionKeyFromServer);
 				peer.m_rpc.Register<string>("ServerCharacters IngameMessage", onReceivedIngameMessage);
 				peer.m_rpc.Register<string>("ServerCharacters KickMessage", onReceivedKickMessage);
+				peer.m_rpc.Register<string>("ServerCharacters ResetSkill", onReceivedResetSkill);
+				peer.m_rpc.Register<string, int>("ServerCharacters RaiseSkill", onReceivedRaiseSkill);
+				peer.m_rpc.Register<Vector3>("ServerCharacters GetPlayerPos", onReceivedPlayerPos);
+				peer.m_rpc.Register<string, int>("ServerCharacters GiveItem", onReceivedGiveItem);
 
 				string signatureFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
 				string backupFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
@@ -190,6 +398,44 @@ public static class ClientSide
 					}
 				}
 			}
+		}
+
+		private static void onReceivedPlayerPos(ZRpc peerRpc, Vector3 pos)
+		{
+			if (awaitingPos is not null)
+			{
+				awaitingPos.SetResult(pos);
+				awaitingPos = null;
+			}
+		}
+
+		private static void onReceivedGiveItem(ZRpc peerRpc, string itemName, int itemQuantity)
+		{
+			string message = Player.m_localPlayer.m_inventory.AddItem(ObjectDB.instance.GetItemPrefab(itemName), itemQuantity) ? $"An admin added {itemQuantity}x {itemName} to your inventory." : $"An admin tried to add {itemQuantity}x {itemName} to your inventory, but it is full.";
+
+			Chat.instance.AddString(message);
+			Chat.instance.m_hideTimer = 0f;
+			MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, message);
+		}
+
+		private static void onReceivedResetSkill(ZRpc peerRpc, string skill)
+		{
+			Player.m_localPlayer.m_skills.CheatResetSkill(skill);
+
+			string message = $"An admin reset your skill {skill}";
+			Chat.instance.AddString(message);
+			Chat.instance.m_hideTimer = 0f;
+			MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, message);
+		}
+
+		private static void onReceivedRaiseSkill(ZRpc peerRpc, string skill, int level)
+		{
+			Player.m_localPlayer.m_skills.CheatRaiseSkill(skill, level);
+
+			string message = $"An admin raised your skill {skill} by {level}";
+			Chat.instance.AddString(message);
+			Chat.instance.m_hideTimer = 0f;
+			MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, message);
 		}
 
 		private static void onReceivedIngameMessage(ZRpc peerRpc, string message)
@@ -323,6 +569,75 @@ public static class ClientSide
 		}
 	}
 
+	[HarmonyPatch(typeof(Game), nameof(Game.FindSpawnPoint))]
+	private class ReplaceSpawnPoint
+	{
+		private static bool CheckCustomSpawnPoint(out Vector3 pos)
+		{
+			try
+			{
+				PlayerTemplate? template = new DeserializerBuilder().IgnoreFields().Build().Deserialize<PlayerTemplate?>(ServerCharacters.playerTemplate.Value);
+				if (template == null)
+				{
+					pos = Vector3.zero;
+					return false;
+				}
+
+				if (template.spawn is { } spawnPos)
+				{
+					pos = new Vector3(spawnPos.x, spawnPos.y, spawnPos.z);
+					return true;
+				}
+			}
+			catch (SerializationException)
+			{
+			}
+
+			pos = Vector3.zero;
+			return false;
+		}
+
+		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> _instructions, ILGenerator ilg)
+		{
+			MethodInfo LocationIconGetter = AccessTools.DeclaredMethod(typeof(ZoneSystem), nameof(ZoneSystem.GetLocationIcon));
+			FieldInfo startLocation = AccessTools.DeclaredField(typeof(Game), nameof(Game.m_StartLocation));
+
+			List<CodeInstruction> instructions = _instructions.ToList();
+			for (int i = 0; i < instructions.Count; ++i)
+			{
+				if (i < instructions.Count - 4 && instructions[i].opcode == OpCodes.Callvirt && instructions[i].OperandIs(LocationIconGetter) && instructions[i - 2].opcode == OpCodes.Ldfld && instructions[i - 2].OperandIs(startLocation))
+				{
+					int callStart = i;
+					MethodInfo zoneSystemGetter = AccessTools.DeclaredPropertyGetter(typeof(ZoneSystem), nameof(ZoneSystem.instance));
+					while (instructions[callStart].opcode != OpCodes.Call || !instructions[callStart].OperandIs(zoneSystemGetter))
+					{
+						--callStart;
+					}
+
+					CodeInstruction afterCondition = instructions.Skip(i).SkipWhile(instr => instr.opcode.FlowControl != FlowControl.Cond_Branch).Skip(1).First();
+					Label label = ilg.DefineLabel();
+					afterCondition.labels.Add(label);
+
+					List<Label> callStartLabels = instructions[callStart].labels;
+
+					instructions.InsertRange(callStart, new[]
+					{
+						new CodeInstruction(OpCodes.Nop) { labels = new List<Label>(callStartLabels) },
+						instructions[i - 1], // location save target
+						new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(ReplaceSpawnPoint), nameof(CheckCustomSpawnPoint))),
+						new CodeInstruction(OpCodes.Brtrue, label)
+					});
+
+					callStartLabels.Clear();
+
+					break;
+				}
+			}
+
+			return instructions;
+		}
+	}
+
 	[HarmonyPatch(typeof(Player), nameof(Player.CreateTombStone))]
 	private class PreserveItemsOnHardcoreModeDeath
 	{
@@ -410,6 +725,28 @@ public static class ClientSide
 		private static void Prefix()
 		{
 			forceSynchronousSaving = true;
+		}
+	}
+
+	[HarmonyPatch(typeof(Game), nameof(Game.SavePlayerProfile))]
+	private class ForceSavingPosition
+	{
+		private static bool originalValue = false;
+
+		[UsedImplicitly]
+		private static void Prefix(ref bool setLogoutPoint)
+		{
+			originalValue = setLogoutPoint;
+			setLogoutPoint = true;
+		}
+
+		[UsedImplicitly]
+		private static void Postfix(Game __instance)
+		{
+			if (!originalValue)
+			{
+				__instance.m_playerProfile.ClearLoguoutPoint();
+			}
 		}
 	}
 
@@ -505,7 +842,7 @@ public static class ClientSide
 	[HarmonyPatch(typeof(Player), nameof(Player.OnDeath))]
 	private class KickPlayerOnDeath
 	{
-		private static void Prefix(Player __instance)
+		private static void Prefix()
 		{
 			if (ServerCharacters.hardcoreMode.GetToggle())
 			{

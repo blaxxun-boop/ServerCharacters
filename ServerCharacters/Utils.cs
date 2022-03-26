@@ -56,7 +56,7 @@ public static class Utils
 
 		public static ProfileName fromPeer(ZNetPeer peer) => new() { id = peer.m_socket.GetHostName(), name = peer.m_playerName };
 	}
-		
+
 	public static class Cache
 	{
 		public static readonly Dictionary<ProfileName, PlayerProfile> profiles = new();
@@ -65,7 +65,7 @@ public static class Utils
 		{
 			if (!profiles.TryGetValue(name, out PlayerProfile profile))
 			{
-				profile = new($"{name.id}_{name.name}");
+				profile = new PlayerProfile($"{name.id}_{name.name}");
 				profile.LoadPlayerFromDisk();
 				profiles[name] = profile;
 			}
@@ -110,7 +110,7 @@ public static class Utils
 				playerList.playerLists.Add(player);
 			}
 		}
-			
+
 		return playerList;
 	}
 }

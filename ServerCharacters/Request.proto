@@ -37,7 +37,7 @@ message WebinterfaceMod {
   string version = 3;
   int64 lastUpdate = 4;
   string modPath = 5;
-  string configPath = 6; 
+  string configPath = 6;
 }
 
 message ModList {
@@ -61,4 +61,24 @@ message Maintenance {
 message IngameMessage {
   repeated string steamId = 1;
   string message = 2;
+}
+
+message RaiseSkill {
+  string id = 1;
+  string name = 2;
+  string skillName = 3;
+  int32 level = 4;
+}
+
+message ResetSkill {
+  string id = 1;
+  string name = 2;
+  string skillName = 3;
+}
+
+message GiveItem {
+  string id = 1;
+  string name = 2;
+  string itemName = 3;
+  int32 itemQuantity = 4;
 }

@@ -43,6 +43,10 @@ public static class ServerSide
 				peer.m_rpc.Register("ServerCharacters CheckSignature", Shared.receiveCompressedFromPeer(onReceivedSignature));
 				peer.m_rpc.Register("ServerCharacters PlayerInventory", Shared.receiveCompressedFromPeer(onReceivedInventory));
 				peer.m_rpc.Register("ServerCharacters PlayerDied", Shared.receiveCompressedFromPeer(onPlayerDied));
+				peer.m_rpc.Register<string, string, string>("ServerCharacters ResetSkill", onResetSkill);
+				peer.m_rpc.Register<string, int, string, string>("ServerCharacters RaiseSkill", onRaiseSkill);
+				peer.m_rpc.Register<string, string>("ServerCharacters GetPlayerPos", onGetPlayerPos);
+				peer.m_rpc.Register<string, int, string, string>("ServerCharacters GiveItem", onGiveItem);
 
 				long time = DateTime.Now.Ticks;
 				byte[] key = deriveKey(time);
@@ -53,7 +57,7 @@ public static class ServerSide
 				peer.m_rpc.Invoke("ServerCharacters KeyExchange", package);
 			}
 		}
-		
+
 		private static void onPlayerDied(ZRpc peerRpc, byte[] profileData)
 		{
 			PlayerProfile? profile = onReceivedProfile(peerRpc, profileData);
@@ -74,6 +78,7 @@ public static class ServerSide
 				// invalid data ...
 				return null;
 			}
+
 			if (Shared.CharacterNameIsForbidden(profile.GetName()))
 			{
 				peerRpc.Invoke("Error", ServerCharacters.CharacterNameDisconnectMagic);
@@ -81,6 +86,7 @@ public static class ServerSide
 				Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to connect with a bad profile name '{profile.GetName()}' and got disconnected");
 				return null;
 			}
+
 			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
 			profile.SavePlayerToDisk();
 			Utils.Log($"Saved player profile data for {profile.m_filename}");
@@ -110,6 +116,7 @@ public static class ServerSide
 				Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an emergency backup, but the profile data is corrupted.");
 				return;
 			}
+
 			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
 
 			string profilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
@@ -135,7 +142,8 @@ public static class ServerSide
 				oldProfile.LoadPlayerFromDisk();
 				inventory = ReadInventoryFromProfile(oldProfile);
 			}
-			PatchPlayerProfile(profile, inventory);
+
+			PatchPlayerProfileInventory(profile, inventory);
 
 			profile.SavePlayerToDisk();
 			Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} succesfully restored an emergency backup for {profile.m_filename}.");
@@ -164,6 +172,124 @@ public static class ServerSide
 		}
 	}
 
+	public static void onGiveItem(ZRpc? peerRpc, string itemName, int itemQuantity, string targetPlayerName, string targetPlayerId)
+	{
+		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
+		foreach (ZNetPeer player in onlinePlayers)
+		{
+			if (player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			{
+				player.m_rpc.Invoke("ServerCharacters GiveItem", itemName, itemQuantity);
+				return;
+			}
+		}
+	}
+
+	private static void onGetPlayerPos(ZRpc peerRpc, string targetPlayerName, string targetPlayerId)
+	{
+		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
+		foreach (ZNetPeer player in onlinePlayers)
+		{
+			if (player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			{
+				peerRpc.Invoke("ServerCharacters GetPlayerPos", player.GetRefPos());
+				return;
+			}
+		}
+
+		peerRpc.Invoke("ServerCharacters GetPlayerPos", Vector3.zero);
+	}
+
+	public static void onResetSkill(ZRpc? peerRpc, string skillName, string targetPlayerName, string targetPlayerId)
+	{
+		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
+		foreach (ZNetPeer player in onlinePlayers)
+		{
+			if (targetPlayerName == "" || player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			{
+				player.m_rpc.Invoke("ServerCharacters ResetSkill", skillName);
+			}
+		}
+
+		foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
+		{
+			FileInfo file = new(s);
+
+			try
+			{
+				if (file.Name.Contains("_") && file.Name.EndsWith(".fch", StringComparison.Ordinal))
+				{
+					string[] parts = file.Name.Split('_');
+					string Id = parts[0];
+					string Name = parts[1].Split('.')[0];
+					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || targetPlayerName == Name))
+					{
+						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}");
+						profile.LoadPlayerFromDisk();
+
+						Skills skills = ReadSkillsFromProfile(profile);
+
+						skills.CheatResetSkill(skillName);
+
+						ZPackage pkg = new();
+						skills.Save(pkg);
+						PatchPlayerProfileSkills(profile, pkg.GetArray());
+						profile.SavePlayerToDisk();
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Utils.Log($"Removing skill failed for profile {file.Name.Replace(".fch", "")}: {e}");
+			}
+		}
+	}
+
+	public static void onRaiseSkill(ZRpc? peerRpc, string skill, int level, string targetPlayerName, string targetPlayerId)
+	{
+		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
+		foreach (ZNetPeer player in onlinePlayers)
+		{
+			if (targetPlayerName == "" || player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			{
+				player.m_rpc.Invoke("ServerCharacters RaiseSkill", skill, level);
+			}
+		}
+
+		foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
+		{
+			FileInfo file = new(s);
+
+			try
+			{
+				if (file.Name.Contains("_") && file.Name.EndsWith(".fch", StringComparison.Ordinal))
+				{
+					string[] parts = file.Name.Split('_');
+					string Id = parts[0];
+					string Name = parts[1].Split('.')[0];
+					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || targetPlayerName == Name))
+					{
+						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}");
+						profile.LoadPlayerFromDisk();
+
+						Skills skills = ReadSkillsFromProfile(profile);
+
+						skills.CheatRaiseSkill(skill, level);
+
+						ZPackage pkg = new();
+						skills.Save(pkg);
+						PatchPlayerProfileSkills(profile, pkg.GetArray());
+						profile.SavePlayerToDisk();
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Utils.Log($"Raise skill failed for profile {file.Name.Replace(".fch", "")}: {e}");
+			}
+		}
+	}
+
 	[HarmonyPatch(typeof(ZNet), nameof(ZNet.Disconnect))]
 	private class PatchZNetDisconnect
 	{
@@ -178,7 +304,7 @@ public static class ServerSide
 				{
 					FileInfo profileFile = new(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + playerProfile.GetFilename() + ".fch");
 					DateTime originalWriteTime = profileFile.LastWriteTime;
-					PatchPlayerProfile(playerProfile, inventoryData);
+					PatchPlayerProfileInventory(playerProfile, inventoryData);
 					playerProfile.SavePlayerToDisk();
 					File.SetLastWriteTime(profileFile.FullName, originalWriteTime);
 				}
@@ -256,24 +382,27 @@ public static class ServerSide
 
 			IEnumerator sendAsync()
 			{
-				PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName);
-				byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? Array.Empty<byte>();
-
-				if (playerProfileData.Length == 0 && ServerCharacters.singleCharacterMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()) && Utils.GetPlayerListFromFiles().playerLists.Any(p => p.Id == peer.m_rpc.GetSocket().GetHostName()))
+				if (peer.m_uid != 0)
 				{
-					peer.m_rpc.Invoke("Error", ServerCharacters.SingleCharacterModeDisconnectMagic);
-					Utils.Log($"Non-admin client {peer.m_rpc.GetSocket().GetHostName()} tried to create a second character and got disconnected");
-					__instance.Disconnect(peer);
-					yield break;
-				}
+					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName);
+					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? Array.Empty<byte>();
 
-				if (!ServerCharacters.backupOnlyMode.GetToggle())
-				{
-					foreach (bool sending in Shared.sendCompressedDataToPeer(peer, "ServerCharacters PlayerProfile", playerProfileData))
+					if (playerProfileData.Length == 0 && ServerCharacters.singleCharacterMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()) && Utils.GetPlayerListFromFiles().playerLists.Any(p => p.Id == peer.m_rpc.GetSocket().GetHostName()))
 					{
-						if (!sending)
+						peer.m_rpc.Invoke("Error", ServerCharacters.SingleCharacterModeDisconnectMagic);
+						Utils.Log($"Non-admin client {peer.m_rpc.GetSocket().GetHostName()} tried to create a second character and got disconnected");
+						__instance.Disconnect(peer);
+						yield break;
+					}
+
+					if (!ServerCharacters.backupOnlyMode.GetToggle())
+					{
+						foreach (bool sending in Shared.sendCompressedDataToPeer(peer, "ServerCharacters PlayerProfile", playerProfileData))
 						{
-							yield return null;
+							if (!sending)
+							{
+								yield return null;
+							}
 						}
 					}
 				}
@@ -327,6 +456,7 @@ public static class ServerSide
 			}
 
 			int endTime = ServerCharacters.monotonicCounter + 30;
+
 			IEnumerator shutdownAfterSave()
 			{
 				yield return new WaitWhile(() => peer.m_socket.IsConnected() && endTime > ServerCharacters.monotonicCounter);
@@ -407,7 +537,7 @@ public static class ServerSide
 		return profile.m_playerData.Skip(startPos).Take(endPos - startPos).ToArray();
 	}
 
-	private static void PatchPlayerProfile(PlayerProfile profile, byte[] inventoryData)
+	private static void PatchPlayerProfileInventory(PlayerProfile profile, byte[] inventoryData)
 	{
 		ZPackage playerPackage = new(profile.m_playerData);
 		ConsumePlayerSaveUntilInventory(playerPackage);
@@ -423,79 +553,171 @@ public static class ServerSide
 		profile.m_playerData = newData;
 	}
 
+	class DummyPlayer : Player
+	{
+		public override void Message(MessageHud.MessageType type, string msg, int amount = 0, Sprite? icon = null)
+		{
+		}
+	}
+
+	private static Skills ReadSkillsFromProfile(PlayerProfile profile)
+	{
+		Skills skills = new()
+		{
+			m_skills = ((Player)Resources.FindObjectsOfTypeAll(typeof(Player))[0]).GetComponent<Skills>().m_skills,
+			// ReSharper disable once Unity.IncorrectMonoBehaviourInstantiation
+			m_player = new DummyPlayer()
+		};
+		ZPackage playerPackage = new(profile.m_playerData);
+		ConsumePlayerSaveUntilSkills(playerPackage);
+		skills.Load(playerPackage);
+
+		return skills;
+	}
+
+	private static void PatchPlayerProfileSkills(PlayerProfile profile, byte[] skillData)
+	{
+		ZPackage playerPackage = new(profile.m_playerData);
+		ConsumePlayerSaveUntilSkills(playerPackage);
+		int startPos = playerPackage.GetPos();
+		new GameObject().AddComponent<Skills>().Load(playerPackage);
+		int endPos = playerPackage.GetPos();
+
+		byte[] newData = new byte[startPos + (profile.m_playerData.LongLength - endPos) + skillData.Length];
+		Array.Copy(profile.m_playerData, newData, startPos);
+		Array.Copy(skillData, 0, newData, startPos, skillData.Length);
+		Array.Copy(profile.m_playerData, endPos, newData, startPos + skillData.Length, profile.m_playerData.LongLength - endPos);
+
+		profile.m_playerData = newData;
+	}
+
 	public static void ConsumePlayerSaveUntilInventory(ZPackage pkg)
 	{
 		throw new NotImplementedException("Was not patched ...");
 	}
 
-	// This transpiler removes all manipulation on the Player object, leaving only the bare calls to Read*() functions on the ZPackage, up to the Inventory.Load() call. All arguments of operations on Player objects are popped away and the return value replaced by a dummy value.
-	// We can use this to observe how far Player.Load() reads into the ZPackage before reading the inventory, allowing us to splice it in and out from raw profile player data.
-	[HarmonyPatch(typeof(ServerSide), nameof(ConsumePlayerSaveUntilInventory))]
-	private static class PlayerProfileConsumptionStart
+	public static void ConsumePlayerSaveUntilSkills(ZPackage pkg)
 	{
-		[UsedImplicitly]
-		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> _instructions, ILGenerator ilGenerator)
+		throw new NotImplementedException("Was not patched ...");
+	}
+
+	// This transpiler removes all manipulation on the Player object, leaving only the bare calls to Read*() functions on the ZPackage, up to the Inventory.Load() or Skills.Load call. All arguments of operations on Player objects are popped away and the return value replaced by a dummy value.
+	// We can use this to observe how far Player.Load() reads into the ZPackage before reading the inventory, allowing us to splice it in and out from raw profile player data.
+	private static IEnumerable<CodeInstruction> PlayerProfileConsumeUntil(ILGenerator ilGenerator, MethodInfo endOperand)
+	{
+		List<CodeInstruction> instructions = PatchProcessor.GetOriginalInstructions(AccessTools.DeclaredMethod(typeof(Player), nameof(Player.Load)), ilGenerator).ToList();
+		for (int i = 0; i < instructions.Count; ++i)
 		{
-			MethodInfo inventorySave = AccessTools.DeclaredMethod(typeof(Inventory), nameof(Inventory.Load));
-			List<CodeInstruction> instructions = PatchProcessor.GetOriginalInstructions(AccessTools.DeclaredMethod(typeof(Player), nameof(Player.Load)), ilGenerator).ToList();
-			for (int i = 0; i < instructions.Count; ++i)
+			if (instructions[i].opcode == OpCodes.Ldarg_0)
 			{
-				if (instructions[i].opcode == OpCodes.Ldarg_0)
+				if (instructions[i + 1].opcode == OpCodes.Ldfld)
 				{
-					if (instructions[i + 1].opcode == OpCodes.Ldfld)
+					if (instructions[i + 1].operand is FieldInfo field && field.FieldType.IsClass)
+					{
+						if (field.FieldType == typeof(Inventory))
+						{
+							yield return new CodeInstruction(OpCodes.Ldnull)
+							{
+								labels = instructions[i++].labels
+							};
+							yield return new CodeInstruction(OpCodes.Ldnull);
+							yield return new CodeInstruction(OpCodes.Ldc_I4_0);
+							yield return new CodeInstruction(OpCodes.Ldc_I4_0);
+							yield return new CodeInstruction(OpCodes.Newobj, typeof(Inventory).GetConstructors()[0]);
+						}
+						else
+						{
+							yield return new CodeInstruction(OpCodes.Ldtoken, field.FieldType)
+							{
+								labels = instructions[i++].labels
+							};
+							yield return new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(Type), nameof(Type.GetTypeFromHandle)));
+							yield return new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(AccessTools), nameof(AccessTools.CreateInstance), new[] { typeof(Type) }));
+						}
+					}
+					else
 					{
 						yield return new CodeInstruction(OpCodes.Ldc_I4_0)
 						{
 							labels = instructions[i++].labels
 						};
-						continue;
 					}
-				}
-				if (instructions[i].opcode == OpCodes.Stfld)
-				{
-					yield return new CodeInstruction(OpCodes.Pop);
-					yield return new CodeInstruction(OpCodes.Pop);
+
 					continue;
 				}
-				if (instructions[i].opcode == OpCodes.Ldarg_1)
-				{
-					instructions[i].opcode = OpCodes.Ldarg_0;
-					yield return instructions[i];
-					continue;
-				}
-				if (instructions[i].opcode == OpCodes.Callvirt && instructions[i].OperandIs(inventorySave))
+			}
+
+			if (instructions[i].opcode == OpCodes.Stfld)
+			{
+				yield return new CodeInstruction(OpCodes.Pop);
+				yield return new CodeInstruction(OpCodes.Pop);
+				continue;
+			}
+
+			if (instructions[i].opcode == OpCodes.Ldarg_1)
+			{
+				instructions[i].opcode = OpCodes.Ldarg_0;
+				yield return instructions[i];
+				continue;
+			}
+
+			if (instructions[i].opcode == OpCodes.Callvirt && instructions[i].OperandIs(endOperand))
+			{
+				yield return new CodeInstruction(OpCodes.Pop);
+				yield return new CodeInstruction(OpCodes.Pop);
+				yield return new CodeInstruction(OpCodes.Ret) { labels = instructions[i + 1].labels };
+				break;
+			}
+
+			if ((instructions[i].opcode == OpCodes.Callvirt || instructions[i].opcode == OpCodes.Call) && instructions[i].operand is MethodInfo method && (method.DeclaringType?.IsAssignableFrom(typeof(Player)) == true || method.DeclaringType?.IsAssignableFrom(typeof(ZLog)) == true) && method.Name != "op_Equality")
+			{
+				for (int j = method.IsStatic ? 0 : -1; j < method.GetParameters().Length; ++j)
 				{
 					yield return new CodeInstruction(OpCodes.Pop);
-					yield return new CodeInstruction(OpCodes.Pop);
-					yield return new CodeInstruction(OpCodes.Ret);
-					break;
-				}
-				if ((instructions[i].opcode == OpCodes.Callvirt || instructions[i].opcode == OpCodes.Call) && instructions[i].operand is MethodInfo method && method.DeclaringType?.IsAssignableFrom(typeof(Player)) == true)
-				{
-					for (int j = -1; j < method.GetParameters().Length; ++j)
-					{
-						yield return new CodeInstruction(OpCodes.Pop);
-					}
-					if (method.ReturnType != typeof(void))
-					{
-						if (method.ReturnType == typeof(float))
-						{
-							yield return new CodeInstruction(OpCodes.Ldc_R4, 0f);
-						}
-						else if (method.ReturnType == typeof(int))
-						{
-							yield return new CodeInstruction(OpCodes.Ldc_I4_0);
-						}
-						else
-						{
-							yield return new CodeInstruction(OpCodes.Ldnull);
-						}
-					}
-					continue;
 				}
 
-				yield return instructions[i];
+				if (method.ReturnType != typeof(void))
+				{
+					if (method.ReturnType == typeof(float))
+					{
+						yield return new CodeInstruction(OpCodes.Ldc_R4, 0f);
+					}
+					else if (method.ReturnType == typeof(int))
+					{
+						yield return new CodeInstruction(OpCodes.Ldc_I4_0);
+					}
+					else
+					{
+						yield return new CodeInstruction(OpCodes.Ldnull);
+					}
+				}
+
+				continue;
 			}
+
+			yield return instructions[i];
+		}
+	}
+
+	[HarmonyPatch(typeof(ServerSide), nameof(ConsumePlayerSaveUntilInventory))]
+	private static class PlayerProfileConsumptionStartInventory
+	{
+		[UsedImplicitly]
+		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilGenerator)
+		{
+			MethodInfo inventorySave = AccessTools.DeclaredMethod(typeof(Inventory), nameof(Inventory.Load));
+			return PlayerProfileConsumeUntil(ilGenerator, inventorySave);
+		}
+	}
+
+	[HarmonyPatch(typeof(ServerSide), nameof(ConsumePlayerSaveUntilSkills))]
+	private static class PlayerProfileConsumptionStartSkills
+	{
+		[UsedImplicitly]
+		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilGenerator)
+		{
+			MethodInfo skillsSave = AccessTools.DeclaredMethod(typeof(Skills), nameof(Skills.Load));
+			return PlayerProfileConsumeUntil(ilGenerator, skillsSave);
 		}
 	}
 }
