@@ -225,13 +225,50 @@ public static class ClientSide
 					ServerCharacters.selfReference.StartCoroutine(AwaitResponse());
 					return;
 				}
+				
+				if (args.Length >= 3 && args[1] == "summon")
+				{
+					string name = args[2];
+					int lastArg = 3;
+					if (name.StartsWith("\""))
+					{
+						name = name.Substring(1);
+						while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
+						{
+							name += " " + args[lastArg++];
+						}
+						name = name.Substring(0, name.Length - 1);
+					}
+
+					ZNet.instance.GetServerPeer().m_rpc.Invoke("ServerCharacters SendOwnPos", name, args.Length > lastArg ? args[lastArg] : "0", Player.m_localPlayer.transform.position);
+
+					IEnumerator AwaitResponse()
+					{
+						awaitingPos = new TaskCompletionSource<Vector3>();
+						Task<Vector3> task = awaitingPos.Task;
+						yield return new WaitUntil(() => task.IsCompleted);
+
+						Vector3 pos = task.Result;
+						if (pos == Vector3.zero)
+						{
+							args.Context.AddString("A player with this name is not online.");
+						}
+						else
+						{
+							args.Context.AddString("The player is being summoned, please wait a second.");
+						}
+					}
+					ServerCharacters.selfReference.StartCoroutine(AwaitResponse());
+					return;
+				}
 
 				args.Context.AddString("ServerCharacters console commands - use 'ServerCharacters' followed by one of the following options.");
 				args.Context.AddString("resetskill [skillname] [playername] [steamid] - resets the skill for the specified player. Steam ID is optional and only required, if multiple players have the same name. If no name is provided, the skill is reset for every character on the server, online and offline.");
 				args.Context.AddString("raiseskill [skillname] [level] [playername] [steamid] - raises the skill for the specified player by the specified level. Steam ID is optional and only required, if multiple players have the same name. If no name is provided, the skill is raised for every character on the server, online and offline.");
 				args.Context.AddString("teleport [playername] [steamid] - teleports you to the specified player. Quote names with a space. Steam ID is optional and only required, if multiple players have the same name.");
+				args.Context.AddString("summon [playername] [steamid] - teleports the specified player to you. Quote names with a space. Steam ID is optional and only required, if multiple players have the same name.");
 				args.Context.AddString("giveitem [itemname] [quantity] [playername] [steamid] - adds the specified item to the specified players inventory in the specified quantity. Quote names with a space. Steam ID is optional and only required, if multiple players have the same name. Will fail, if their inventory is full.");
-			}), optionsFetcher: () => new List<string> { "resetskill", "teleport", "raiseskill", "giveitem" });
+			}), optionsFetcher: () => new List<string> { "resetskill", "teleport", "summon", "raiseskill", "giveitem" });
 		}
 	}
 
@@ -378,6 +415,8 @@ public static class ClientSide
 				peer.m_rpc.Register<string, int>("ServerCharacters RaiseSkill", onReceivedRaiseSkill);
 				peer.m_rpc.Register<Vector3>("ServerCharacters GetPlayerPos", onReceivedPlayerPos);
 				peer.m_rpc.Register<string, int>("ServerCharacters GiveItem", onReceivedGiveItem);
+				peer.m_rpc.Register<Vector3>("ServerCharacters SendOwnPos", onReceivedOwnPos);
+				peer.m_rpc.Register<Vector3>("ServerCharacters TeleportTo", onReceivedTeleportTo);
 
 				string signatureFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
 				string backupFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
@@ -398,6 +437,20 @@ public static class ClientSide
 					}
 				}
 			}
+		}
+		
+		private static void onReceivedOwnPos(ZRpc peerRpc, Vector3 pos)
+		{
+			if (awaitingPos is not null)
+			{
+				awaitingPos.SetResult(pos);
+				awaitingPos = null;
+			}
+		}
+
+		private static void onReceivedTeleportTo(ZRpc peerRpc, Vector3 pos)
+		{
+			Player.m_localPlayer.TeleportTo(pos, Quaternion.identity, true);
 		}
 
 		private static void onReceivedPlayerPos(ZRpc peerRpc, Vector3 pos)

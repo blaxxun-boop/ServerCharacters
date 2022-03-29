@@ -47,6 +47,7 @@ public static class ServerSide
 				peer.m_rpc.Register<string, int, string, string>("ServerCharacters RaiseSkill", onRaiseSkill);
 				peer.m_rpc.Register<string, string>("ServerCharacters GetPlayerPos", onGetPlayerPos);
 				peer.m_rpc.Register<string, int, string, string>("ServerCharacters GiveItem", onGiveItem);
+				peer.m_rpc.Register<string, string, Vector3>("ServerCharacters SendOwnPos", onSendOwnPos);
 
 				long time = DateTime.Now.Ticks;
 				byte[] key = deriveKey(time);
@@ -198,6 +199,22 @@ public static class ServerSide
 		}
 
 		peerRpc.Invoke("ServerCharacters GetPlayerPos", Vector3.zero);
+	}
+	
+	private static void onSendOwnPos(ZRpc peerRpc, string targetPlayerName, string targetPlayerId, Vector3 pos)
+	{
+		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
+		foreach (ZNetPeer player in onlinePlayers)
+		{
+			if (player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			{
+				player.m_rpc.Invoke("ServerCharacters TeleportTo", pos);
+				peerRpc.Invoke("ServerCharacters SendOwnPos", player.GetRefPos());
+				return;
+			}
+		}
+
+		peerRpc.Invoke("ServerCharacters SendOwnPos", Vector3.zero);
 	}
 
 	public static void onResetSkill(ZRpc? peerRpc, string skillName, string targetPlayerName, string targetPlayerId)

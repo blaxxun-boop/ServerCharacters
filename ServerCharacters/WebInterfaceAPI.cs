@@ -17,7 +17,7 @@ namespace ServerCharacters;
 
 public static class WebInterfaceAPI
 {
-	private static ServerConfig serverConfig = null!;
+	private static ServerConfig? serverConfig;
 	private static readonly HashSet<TcpClient> clients = new();
 
 	public static void StartServer()
@@ -59,8 +59,11 @@ public static class WebInterfaceAPI
 	{
 		private static void Postfix()
 		{
-			serverConfig.serverName = ZNet.m_ServerName;
-			Broadcast("ServerConfig", serverConfig);
+			if (serverConfig is not null)
+			{
+				serverConfig.serverName = ZNet.m_ServerName;
+				Broadcast("ServerConfig", serverConfig);
+			}
 		}
 	}
 
