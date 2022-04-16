@@ -200,7 +200,7 @@ public static class ServerSide
 
 		peerRpc.Invoke("ServerCharacters GetPlayerPos", Vector3.zero);
 	}
-	
+
 	private static void onSendOwnPos(ZRpc peerRpc, string targetPlayerName, string targetPlayerId, Vector3 pos)
 	{
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;

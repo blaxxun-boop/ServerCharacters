@@ -225,7 +225,7 @@ public static class ClientSide
 					ServerCharacters.selfReference.StartCoroutine(AwaitResponse());
 					return;
 				}
-				
+
 				if (args.Length >= 3 && args[1] == "summon")
 				{
 					string name = args[2];
@@ -249,14 +249,7 @@ public static class ClientSide
 						yield return new WaitUntil(() => task.IsCompleted);
 
 						Vector3 pos = task.Result;
-						if (pos == Vector3.zero)
-						{
-							args.Context.AddString("A player with this name is not online.");
-						}
-						else
-						{
-							args.Context.AddString("The player is being summoned, please wait a second.");
-						}
+						args.Context.AddString(pos == Vector3.zero ? "A player with this name is not online." : "The player is being summoned, please wait a second.");
 					}
 					ServerCharacters.selfReference.StartCoroutine(AwaitResponse());
 					return;
@@ -438,7 +431,7 @@ public static class ClientSide
 				}
 			}
 		}
-		
+
 		private static void onReceivedOwnPos(ZRpc peerRpc, Vector3 pos)
 		{
 			if (awaitingPos is not null)
@@ -544,6 +537,19 @@ public static class ClientSide
 				File.Delete(signatureFilePath);
 				File.Delete(backupFilePath);
 				Utils.Log($"Deleted emergency backup from {backupFilePath}");
+			}
+		}
+	}
+
+	[HarmonyPatch(typeof(ZNet), nameof(ZNet.RPC_PeerInfo))]
+	private static class DetectBackupOnlyMode
+	{
+		[UsedImplicitly]
+		private static void Postfix(ZNet __instance)
+		{
+			if (ServerCharacters.backupOnlyMode.GetToggle() && !__instance.IsServer())
+			{
+				serverCharacter = true;
 			}
 		}
 	}
@@ -787,8 +793,14 @@ public static class ClientSide
 		private static bool originalValue = false;
 
 		[UsedImplicitly]
-		private static void Prefix(ref bool setLogoutPoint)
+		private static void Prefix(Game __instance, ref bool setLogoutPoint)
 		{
+			if (__instance.m_playerProfile.HaveLogoutPoint())
+			{
+				originalValue = true;
+				return;
+			}
+
 			originalValue = setLogoutPoint;
 			setLogoutPoint = true;
 		}

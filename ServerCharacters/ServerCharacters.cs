@@ -15,7 +15,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.2.1";
+	private const string ModVersion = "1.2.2";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -29,7 +29,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.2.0" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.2.2" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -81,7 +81,7 @@ public class ServerCharacters : BaseUnityPlugin
 		hardcoreMode = config("1 - General", "Hardcore mode", Toggle.Off, "If set to on, players will be kicked from the server and their save file on the server will be deleted, if they die.");
 		singleCharacterMode = config("1 - General", "Single Character Mode", Toggle.Off, "If set to on, each SteamID can create one character only on this server. Has no effect for admins.");
 		backupOnlyMode = config("1 - General", "Backup only mode", Toggle.Off, "Enabling this will not enforce the server profile anymore. DO NOT ENABLE THIS IF YOU DON'T KNOW EXACTLY WHAT YOU ARE DOING!");
-		backupsToKeep = config("1 - General", "Number of backups to keep", 5, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(1, 15)));
+		backupsToKeep = config("1 - General", "Number of backups to keep", 25, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(1, 50)));
 		autoSaveInterval = config("1 - General", "Auto save interval", 20, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 30)));
 		webhookURL = config("1 - General", "Discord Webhook URL", "", new ConfigDescription("Discord API endpoint to announce maintenance.", null, new ConfigurationManagerAttributes()), false);
 		webhookUsername = config("1 - General", "Username to use for Discord", "Maintenance Bot", new ConfigDescription("Username to be used for maintenance related posts to Discord.", null, new ConfigurationManagerAttributes()), false);
