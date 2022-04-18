@@ -795,7 +795,7 @@ public static class ClientSide
 		[UsedImplicitly]
 		private static void Prefix(Game __instance, ref bool setLogoutPoint)
 		{
-			if (__instance.m_playerProfile.HaveLogoutPoint())
+			if (ZNet.m_world == null || __instance.m_playerProfile.HaveLogoutPoint())
 			{
 				originalValue = true;
 				return;
