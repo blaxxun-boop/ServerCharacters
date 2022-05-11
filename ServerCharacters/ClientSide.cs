@@ -61,7 +61,7 @@ public static class ClientSide
 		{
 			_ = new Terminal.ConsoleCommand("ServerCharacters", "Manages the ServerCharacters commands.", (Terminal.ConsoleEvent)(args =>
 			{
-				if (false && !ServerCharacters.configSync.IsAdmin)
+				if (!ServerCharacters.configSync.IsAdmin)
 				{
 					args.Context.AddString("You are not an admin on this server.");
 					return;
