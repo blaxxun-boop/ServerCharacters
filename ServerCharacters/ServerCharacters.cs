@@ -15,7 +15,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.2.3";
+	private const string ModVersion = "1.2.4";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -29,7 +29,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.2.3" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.2.4" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -73,7 +73,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public void Awake()
 	{
 		selfReference = this;
-		serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.Off, "If on, the configuration is locked and can be changed by server admins only.");
+		serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.On, "If on, the configuration is locked and can be changed by server admins only.");
 		configSync.AddLockingConfigEntry(serverConfigLocked);
 		maintenanceMode = config("1 - General", "Maintenance Mode", Toggle.Off, "If set to on, a timer will start. If the timer elapses, all non-admins will be disconnected, the world will be saved and only admins will be able to connect to the server, until maintenance mode is toggled to off.");
 		maintenanceMode.SettingChanged += toggleMaintenanceMode;

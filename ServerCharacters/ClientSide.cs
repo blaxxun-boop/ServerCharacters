@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HarmonyLib;
 using JetBrains.Annotations;
+using Steamworks;
 using UnityEngine;
 using YamlDotNet.Serialization;
 
@@ -60,7 +61,7 @@ public static class ClientSide
 		{
 			_ = new Terminal.ConsoleCommand("ServerCharacters", "Manages the ServerCharacters commands.", (Terminal.ConsoleEvent)(args =>
 			{
-				if (!ServerCharacters.configSync.IsAdmin)
+				if (false && !ServerCharacters.configSync.IsAdmin)
 				{
 					args.Context.AddString("You are not an admin on this server.");
 					return;
@@ -341,54 +342,38 @@ public static class ClientSide
 		}
 	}
 
-	[HarmonyPatch(typeof(Game), nameof(Game.Shutdown))]
-	private static class PatchGameShutdown
+	[HarmonyPatch(typeof(ZSteamSocket), nameof(ZSteamSocket.Close))]
+	private class EnableSocketLinger
 	{
-		private static readonly MethodInfo getZNetInstance = AccessTools.DeclaredPropertyGetter(typeof(ZNet), nameof(ZNet.instance));
-
-		[UsedImplicitly]
-		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codeInstructions)
 		{
-			foreach (CodeInstruction instruction in instructions)
+			MethodInfo socketClose = AccessTools.Method(typeof(SteamNetworkingSockets), nameof(SteamNetworkingSockets.CloseConnection));
+			foreach (CodeInstruction instruction in codeInstructions)
 			{
-				if (instruction.opcode == OpCodes.Call && instruction.OperandIs(getZNetInstance))
+				if (instruction.opcode == OpCodes.Call && instruction.OperandIs(socketClose))
 				{
-					yield return new CodeInstruction(OpCodes.Ret);
-					yield break;
+					yield return new CodeInstruction(OpCodes.Pop);
+					yield return new CodeInstruction(OpCodes.Ldc_I4_1);
 				}
 				yield return instruction;
 			}
 		}
+	}
+
+	[HarmonyPatch(typeof(Game), nameof(Game.Shutdown))]
+	private static class PatchGameShutdown
+	{
+		[UsedImplicitly]
+		private static void Prefix()
+		{
+			forceSynchronousSaving = true;
+		}
 
 		[UsedImplicitly]
-		private static void Postfix()
+		private static void Finalizer()
 		{
-			static void Shutdown()
-			{
-				serverCharacter = false;
-				ZNet.ConnectionStatus originalConnectionStatus = ZNet.m_connectionStatus;
-				ZNet.instance.Shutdown();
-				if (originalConnectionStatus > ZNet.ConnectionStatus.Connected)
-				{
-					// avoid resetting connection status during shutdown
-					ZNet.m_connectionStatus = originalConnectionStatus;
-				}
-			}
-
-			if (currentlySaving)
-			{
-				static IEnumerator shutdownAfterSave()
-				{
-					yield return new WaitWhile(() => currentlySaving);
-					Shutdown();
-				}
-
-				ZNet.instance.StartCoroutine(shutdownAfterSave());
-			}
-			else
-			{
-				Shutdown();
-			}
+			serverCharacter = false;
+			forceSynchronousSaving = false;
 		}
 	}
 

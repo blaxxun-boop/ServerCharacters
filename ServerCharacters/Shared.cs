@@ -109,6 +109,7 @@ namespace ServerCharacters
 
 			if (dataFragments.Count < fragments)
 			{
+				Utils.Log($"Received incomplete data from peer {sender.GetSocket().GetHostName()} - fragments {fragments}, received {dataFragments.Count}");
 				return;
 			}
 

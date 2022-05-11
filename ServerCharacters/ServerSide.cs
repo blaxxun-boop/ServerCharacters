@@ -32,7 +32,7 @@ public static class ServerSide
 		{
 			if (__instance.IsServer())
 			{
-				if (ServerCharacters.maintenanceMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()))
+				if (ServerCharacters.maintenanceMode.GetToggle() && !isAdmin(peer.m_rpc))
 				{
 					peer.m_rpc.Invoke("Error", ServerCharacters.MaintenanceDisconnectMagic);
 					Utils.Log($"Non-admin client {peer.m_rpc.GetSocket().GetHostName()} tried to connect during maintenance and got disconnected");
@@ -58,7 +58,7 @@ public static class ServerSide
 				peer.m_rpc.Invoke("ServerCharacters KeyExchange", package);
 			}
 		}
-
+		
 		private static void onPlayerDied(ZRpc peerRpc, byte[] profileData)
 		{
 			PlayerProfile? profile = onReceivedProfile(peerRpc, profileData);
@@ -76,6 +76,7 @@ public static class ServerSide
 			PlayerProfile profile = new();
 			if (!profile.LoadPlayerProfileFromBytes(profileData))
 			{
+				Utils.Log($"Encountered invalid data for bytes from steam ID {peerRpc.m_socket.GetHostName()}");
 				// invalid data ...
 				return null;
 			}
@@ -172,9 +173,19 @@ public static class ServerSide
 			return profileHash.SequenceEqual(decryptedHash) ? time : 0;
 		}
 	}
+	
+	private static bool isAdmin(ZRpc? rpc)
+	{
+		return rpc is null || ZNet.instance.m_adminList.Contains(rpc.GetSocket().GetHostName());
+	}
 
 	public static void onGiveItem(ZRpc? peerRpc, string itemName, int itemQuantity, string targetPlayerName, string targetPlayerId)
 	{
+		if (!isAdmin(peerRpc))
+		{
+			return;
+		}
+		
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -188,6 +199,11 @@ public static class ServerSide
 
 	private static void onGetPlayerPos(ZRpc peerRpc, string targetPlayerName, string targetPlayerId)
 	{
+		if (!isAdmin(peerRpc))
+		{
+			return;
+		}
+		
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -203,6 +219,11 @@ public static class ServerSide
 
 	private static void onSendOwnPos(ZRpc peerRpc, string targetPlayerName, string targetPlayerId, Vector3 pos)
 	{
+		if (!isAdmin(peerRpc))
+		{
+			return;
+		}
+		
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -219,6 +240,11 @@ public static class ServerSide
 
 	public static void onResetSkill(ZRpc? peerRpc, string skillName, string targetPlayerName, string targetPlayerId)
 	{
+		if (!isAdmin(peerRpc))
+		{
+			return;
+		}
+		
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -264,6 +290,11 @@ public static class ServerSide
 
 	public static void onRaiseSkill(ZRpc? peerRpc, string skill, int level, string targetPlayerName, string targetPlayerId)
 	{
+		if (!isAdmin(peerRpc))
+		{
+			return;
+		}
+		
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
