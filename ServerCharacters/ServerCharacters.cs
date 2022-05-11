@@ -29,7 +29,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.2.4" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.2.5" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
