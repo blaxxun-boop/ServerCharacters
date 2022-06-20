@@ -65,7 +65,7 @@ public static class ServerSide
 			if (profile is not null)
 			{
 				backupProfile(profile);
-				string profilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
+				string profilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
 				File.Delete(profilePath + ".old");
 				File.Move(profilePath, profilePath + ".old");
 			}
@@ -73,7 +73,7 @@ public static class ServerSide
 
 		private static PlayerProfile? onReceivedProfile(ZRpc peerRpc, byte[] profileData)
 		{
-			PlayerProfile profile = new();
+			PlayerProfile profile = new(fileSource: FileHelpers.FileSource.Local);
 			if (!profile.LoadPlayerProfileFromBytes(profileData))
 			{
 				Utils.Log($"Encountered invalid data for bytes from steam ID {peerRpc.m_socket.GetHostName()}");
@@ -111,7 +111,7 @@ public static class ServerSide
 				return;
 			}
 
-			PlayerProfile profile = new();
+			PlayerProfile profile = new(fileSource: FileHelpers.FileSource.Local);
 			if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.GetName()))
 			{
 				// invalid data ...
@@ -121,7 +121,7 @@ public static class ServerSide
 
 			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
 
-			string profilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
+			string profilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
 			FileInfo profileFileInfo = new(profilePath);
 			if (!profileFileInfo.Exists)
 			{
@@ -254,20 +254,20 @@ public static class ServerSide
 			}
 		}
 
-		foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
+		foreach (string s in Directory.GetFiles(Utils.CharacterSavePath))
 		{
 			FileInfo file = new(s);
 
 			try
 			{
-				if (file.Name.Contains("_") && file.Name.EndsWith(".fch", StringComparison.Ordinal))
+				if (Utils.IsServerCharactersFilePattern(file.Name))
 				{
 					string[] parts = file.Name.Split('_');
 					string Id = parts[0];
 					string Name = parts[1].Split('.')[0];
 					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || targetPlayerName == Name))
 					{
-						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}");
+						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}", FileHelpers.FileSource.Local);
 						profile.LoadPlayerFromDisk();
 
 						Skills skills = ReadSkillsFromProfile(profile);
@@ -304,20 +304,20 @@ public static class ServerSide
 			}
 		}
 
-		foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
+		foreach (string s in Directory.GetFiles(Utils.CharacterSavePath))
 		{
 			FileInfo file = new(s);
 
 			try
 			{
-				if (file.Name.Contains("_") && file.Name.EndsWith(".fch", StringComparison.Ordinal))
+				if (Utils.IsServerCharactersFilePattern(file.Name))
 				{
 					string[] parts = file.Name.Split('_');
 					string Id = parts[0];
 					string Name = parts[1].Split('.')[0];
 					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || targetPlayerName == Name))
 					{
-						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}");
+						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}", FileHelpers.FileSource.Local);
 						profile.LoadPlayerFromDisk();
 
 						Skills skills = ReadSkillsFromProfile(profile);
@@ -347,10 +347,10 @@ public static class ServerSide
 			{
 				Inventories.Remove(profileName);
 
-				PlayerProfile playerProfile = new(profileName.id + "_" + profileName.name);
+				PlayerProfile playerProfile = new(profileName.id + "_" + profileName.name, FileHelpers.FileSource.Local);
 				if (playerProfile.LoadPlayerFromDisk())
 				{
-					FileInfo profileFile = new(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + playerProfile.GetFilename() + ".fch");
+					FileInfo profileFile = new(Utils.CharacterSavePath + Path.DirectorySeparatorChar + playerProfile.GetFilename() + ".fch");
 					DateTime originalWriteTime = profileFile.LastWriteTime;
 					PatchPlayerProfileInventory(playerProfile, inventoryData);
 					playerProfile.SavePlayerToDisk();
@@ -432,7 +432,7 @@ public static class ServerSide
 			{
 				if (peer.m_uid != 0)
 				{
-					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName);
+					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName, FileHelpers.FileSource.Local);
 					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? Array.Empty<byte>();
 
 					if (playerProfileData.Length == 0 && ServerCharacters.singleCharacterMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()) && Utils.GetPlayerListFromFiles().playerLists.Any(p => p.Id == peer.m_rpc.GetSocket().GetHostName()))
@@ -542,11 +542,11 @@ public static class ServerSide
 
 	private static void backupProfile(PlayerProfile profile)
 	{
-		string saveFile = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + profile.m_filename + ".fch.old";
-		if (File.Exists(saveFile))
+		string saveFile = PlayerProfile.GetCharacterFolderPath(profile.m_fileSource) + profile.m_filename + ".fch.old";
+		if (FileHelpers.Exists(saveFile, profile.m_fileSource))
 		{
-			Directory.CreateDirectory(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + "backups");
-			using FileStream zipToOpen = new(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + "backups" + Path.DirectorySeparatorChar + profile.m_filename + ".zip", FileMode.OpenOrCreate);
+			Directory.CreateDirectory(Utils.CharacterSavePath + Path.DirectorySeparatorChar + "backups");
+			using FileStream zipToOpen = new(Utils.CharacterSavePath + Path.DirectorySeparatorChar + "backups" + Path.DirectorySeparatorChar + profile.m_filename + ".zip", FileMode.OpenOrCreate);
 			using ZipArchive archive = new(zipToOpen, ZipArchiveMode.Update);
 
 			while (archive.Entries.Count >= ServerCharacters.backupsToKeep.Value)
@@ -555,7 +555,10 @@ public static class ServerSide
 			}
 
 			string fileName = profile.m_filename + "-" + DateTime.Now.ToString("yyyy-MM-ddTHH-mm-ss") + ".fch";
-			archive.CreateEntryFromFile(saveFile, fileName);
+			using Stream archiveFileStream = archive.CreateEntry(fileName).Open();
+			FileReader reader = new(saveFile, profile.m_fileSource);
+			(reader.m_stream?.BaseStream ?? reader.m_binary.BaseStream).CopyTo(archiveFileStream);
+			reader.Dispose();
 			Utils.Log($"Backed up a player profile in '{fileName}'");
 		}
 

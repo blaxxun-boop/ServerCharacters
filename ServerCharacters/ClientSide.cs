@@ -288,8 +288,8 @@ public static class ClientSide
 		{
 			if (serverCharacter && doEmergencyBackup && serverEncryptionKey != null)
 			{
-				File.WriteAllBytes(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + profile.m_filename + ".fch.signature", generateProfileSignature(packageArray, serverEncryptionKey));
-				File.WriteAllBytes(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + profile.m_filename + ".fch.serverbackup", packageArray);
+				File.WriteAllBytes(Utils.CharacterSavePath + Path.DirectorySeparatorChar + profile.m_filename + ".fch.signature", generateProfileSignature(packageArray, serverEncryptionKey));
+				File.WriteAllBytes(Utils.CharacterSavePath + Path.DirectorySeparatorChar + profile.m_filename + ".fch.serverbackup", packageArray);
 				doEmergencyBackup = false;
 			}
 
@@ -396,8 +396,8 @@ public static class ClientSide
 				peer.m_rpc.Register<Vector3>("ServerCharacters SendOwnPos", onReceivedOwnPos);
 				peer.m_rpc.Register<Vector3>("ServerCharacters TeleportTo", onReceivedTeleportTo);
 
-				string signatureFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
-				string backupFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
+				string signatureFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
+				string backupFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
 
 				if (File.Exists(signatureFilePath) && File.Exists(backupFilePath))
 				{
@@ -514,8 +514,8 @@ public static class ClientSide
 			profile.m_filename = Game.instance.m_playerProfile.m_filename;
 			Game.instance.m_playerProfile = profile;
 
-			string signatureFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
-			string backupFilePath = global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
+			string signatureFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
+			string backupFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
 
 			if (File.Exists(backupFilePath) && File.Exists(signatureFilePath))
 			{

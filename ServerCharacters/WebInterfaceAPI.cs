@@ -27,7 +27,7 @@ public static class WebInterfaceAPI
 			configPath = Paths.ConfigPath,
 			pluginsPath = Paths.PluginPath,
 			patchersPath = Paths.PatcherPluginPath,
-			savePath = global::Utils.GetSaveDataPath(),
+			savePath = global::Utils.GetSaveDataPath(FileHelpers.FileSource.Local),
 			processId = Process.GetCurrentProcess().Id,
 			serverName = ZNet.m_ServerName
 		};

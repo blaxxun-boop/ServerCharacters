@@ -15,7 +15,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.2.5";
+	private const string ModVersion = "1.2.6";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -119,19 +119,32 @@ public class ServerCharacters : BaseUnityPlugin
 			WebInterfaceAPI.StartServer();
 		}
 
-		Directory.CreateDirectory(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters");
+		Directory.CreateDirectory(Utils.CharacterSavePath);
 
-		foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
+		string legacyPath = PlayerProfile.GetCharacterFolderPath(FileHelpers.FileSource.Legacy);
+		if (Directory.Exists(legacyPath))
 		{
-			FileInfo file = new(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters" + Path.DirectorySeparatorChar + s);
-			if (file.Name.Contains("_") && file.Name.EndsWith(".fch", StringComparison.Ordinal))
+			foreach (string s in Directory.GetFiles(legacyPath))
+			{
+				FileInfo file = new(s);
+				if (Utils.IsServerCharactersFilePattern(file.Name) || file.Name == "backups")
+				{
+					Directory.Move(file.FullName, Utils.CharacterSavePath + Path.DirectorySeparatorChar + file.Name);
+				}
+			}
+		}
+
+		foreach (string s in Directory.GetFiles(Utils.CharacterSavePath))
+		{
+			FileInfo file = new(s);
+			if (Utils.IsServerCharactersFilePattern(file.Name))
 			{
 				Utils.ProfileName profileName = new();
 
 				string[] parts = file.Name.Split('_');
 				profileName.id = parts[0];
 				profileName.name = parts[1].Split('.')[0];
-				PlayerProfile profile = new(file.Name.Replace(".fch", ""));
+				PlayerProfile profile = new(file.Name.Replace(".fch", ""), FileHelpers.FileSource.Local);
 				profile.Load();
 				Utils.Cache.profiles[profileName] = profile;
 			}

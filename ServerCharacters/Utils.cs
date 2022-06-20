@@ -49,6 +49,10 @@ public static class Utils
 		ServerCharacters.logger.LogMessage(message);
 	}
 
+	public static readonly string CharacterSavePath = PlayerProfile.GetCharacterFolderPath(FileHelpers.FileSource.Local);
+
+	public static bool IsServerCharactersFilePattern(string file) => file.Contains("_") && file.EndsWith(".fch", StringComparison.Ordinal) && !file.Contains("_backup_");
+
 	public struct ProfileName
 	{
 		[UsedImplicitly] public string id;
@@ -65,7 +69,7 @@ public static class Utils
 		{
 			if (!profiles.TryGetValue(name, out PlayerProfile profile))
 			{
-				profile = new PlayerProfile($"{name.id}_{name.name}");
+				profile = new PlayerProfile($"{name.id}_{name.name}", FileHelpers.FileSource.Local);
 				profile.LoadPlayerFromDisk();
 				profiles[name] = profile;
 			}
@@ -78,10 +82,10 @@ public static class Utils
 	{
 		PlayerList playerList = new();
 		Dictionary<ProfileName, ZNet.PlayerInfo> playerInfos = ZNet.m_instance.m_players.ToDictionary(p => new ProfileName { id = p.m_host, name = p.m_name }, p => p);
-		foreach (string s in Directory.GetFiles(global::Utils.GetSaveDataPath() + Path.DirectorySeparatorChar + "characters"))
+		foreach (string s in Directory.GetFiles(CharacterSavePath))
 		{
 			FileInfo file = new(s);
-			if (file.Name.Contains("_") && file.Name.EndsWith(".fch", StringComparison.Ordinal))
+			if (Utils.IsServerCharactersFilePattern(file.Name))
 			{
 				WebinterfacePlayer player = new();
 
