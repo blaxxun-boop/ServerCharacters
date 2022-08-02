@@ -89,7 +89,7 @@ public static class ServerSide
 				return null;
 			}
 
-			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
+			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName().ToLower();
 			profile.SavePlayerToDisk();
 			Utils.Log($"Saved player profile data for {profile.m_filename}");
 
@@ -119,7 +119,7 @@ public static class ServerSide
 				return;
 			}
 
-			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName();
+			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName().ToLower();
 
 			string profilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
 			FileInfo profileFileInfo = new(profilePath);
@@ -189,7 +189,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
 			{
 				player.m_rpc.Invoke("ServerCharacters GiveItem", itemName, itemQuantity);
 				return;
@@ -207,7 +207,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
 			{
 				peerRpc.Invoke("ServerCharacters GetPlayerPos", player.GetRefPos());
 				return;
@@ -227,7 +227,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
 			{
 				player.m_rpc.Invoke("ServerCharacters TeleportTo", pos);
 				peerRpc.Invoke("ServerCharacters SendOwnPos", player.GetRefPos());
@@ -248,7 +248,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (targetPlayerName == "" || player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (targetPlayerName == "" || string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
 			{
 				player.m_rpc.Invoke("ServerCharacters ResetSkill", skillName);
 			}
@@ -265,7 +265,7 @@ public static class ServerSide
 					string[] parts = file.Name.Split('_');
 					string Id = parts[0];
 					string Name = parts[1].Split('.')[0];
-					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || targetPlayerName == Name))
+					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || string.Compare(targetPlayerName, Name, StringComparison.InvariantCultureIgnoreCase) == 0))
 					{
 						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}", FileHelpers.FileSource.Local);
 						profile.LoadPlayerFromDisk();
@@ -298,7 +298,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (targetPlayerName == "" || player.m_playerName == targetPlayerName && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (targetPlayerName == "" || string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
 			{
 				player.m_rpc.Invoke("ServerCharacters RaiseSkill", skill, level);
 			}
@@ -315,7 +315,7 @@ public static class ServerSide
 					string[] parts = file.Name.Split('_');
 					string Id = parts[0];
 					string Name = parts[1].Split('.')[0];
-					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || targetPlayerName == Name))
+					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || string.Compare(targetPlayerName, Name, StringComparison.InvariantCultureIgnoreCase) == 0))
 					{
 						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}", FileHelpers.FileSource.Local);
 						profile.LoadPlayerFromDisk();
@@ -347,7 +347,7 @@ public static class ServerSide
 			{
 				Inventories.Remove(profileName);
 
-				PlayerProfile playerProfile = new(profileName.id + "_" + profileName.name, FileHelpers.FileSource.Local);
+				PlayerProfile playerProfile = new(profileName.id + "_" + profileName.name.ToLower(), FileHelpers.FileSource.Local);
 				if (playerProfile.LoadPlayerFromDisk())
 				{
 					FileInfo profileFile = new(Utils.CharacterSavePath + Path.DirectorySeparatorChar + playerProfile.GetFilename() + ".fch");
@@ -432,7 +432,7 @@ public static class ServerSide
 			{
 				if (peer.m_uid != 0)
 				{
-					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName, FileHelpers.FileSource.Local);
+					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName.ToLower(), FileHelpers.FileSource.Local);
 					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? Array.Empty<byte>();
 
 					if (playerProfileData.Length == 0 && ServerCharacters.singleCharacterMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()) && Utils.GetPlayerListFromFiles().playerLists.Any(p => p.Id == peer.m_rpc.GetSocket().GetHostName()))

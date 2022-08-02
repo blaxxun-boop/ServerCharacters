@@ -15,7 +15,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.2.6";
+	private const string ModVersion = "1.2.7";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -139,6 +139,14 @@ public class ServerCharacters : BaseUnityPlugin
 			FileInfo file = new(s);
 			if (Utils.IsServerCharactersFilePattern(file.Name))
 			{
+				string lowerName = file.Name.ToLower();
+				if (lowerName != file.Name)
+				{
+					string newPath = file.DirectoryName + Path.DirectorySeparatorChar + lowerName;
+					file.MoveTo(newPath);
+					file = new FileInfo(newPath);
+				}
+
 				Utils.ProfileName profileName = new();
 
 				string[] parts = file.Name.Split('_');

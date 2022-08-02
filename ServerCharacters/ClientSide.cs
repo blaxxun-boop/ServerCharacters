@@ -483,7 +483,6 @@ public static class ClientSide
 
 		private static void onReceivedProfile(ZRpc peerRpc, byte[] profileData)
 		{
-			PlayerProfile profile = new();
 			if (profileData.Length == 0)
 			{
 				if (Game.instance.m_playerProfile.m_worldData.Count != 0)
@@ -501,6 +500,7 @@ public static class ClientSide
 				return;
 			}
 
+			PlayerProfile profile = new();
 			if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.m_playerName))
 			{
 				Game.instance.Logout();
@@ -550,18 +550,25 @@ public static class ClientSide
 				return;
 			}
 			acquireCharacterFromTemplate = false;
-
+			
+			Player.m_localPlayer.m_inventory.RemoveAll();
+			Player.m_localPlayer.m_skills.m_skillData.Clear();
+			Player.m_localPlayer.m_knownMaterial.Clear();
+			Player.m_localPlayer.m_knownRecipes.Clear();
+			Player.m_localPlayer.m_knownStations.Clear();
+			Player.m_localPlayer.m_knownTexts.Clear();
+			Player.m_localPlayer.m_uniques.Clear();
+			Player.m_localPlayer.m_trophies.Clear();
+			Player.m_localPlayer.GiveDefaultItems();
+			
 			try
 			{
 				PlayerTemplate? template = new DeserializerBuilder().IgnoreFields().Build().Deserialize<PlayerTemplate?>(ServerCharacters.playerTemplate.Value);
 				if (template != null)
 				{
-					foreach (Skills.SkillDef skill in Player.m_localPlayer.GetSkills().m_skills)
+					foreach (KeyValuePair<string, float> skillKv in template.skills)
 					{
-						if (template.skills.TryGetValue(skill.m_skill.ToString(), out float skillValue))
-						{
-							Player.m_localPlayer.GetSkills().GetSkill(skill.m_skill).m_level = skillValue;
-						}
+						Player.m_localPlayer.GetSkills().CheatRaiseSkill(skillKv.Key, skillKv.Value);
 					}
 
 					Inventory inventory = Player.m_localPlayer.m_inventory;
