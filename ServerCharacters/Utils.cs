@@ -81,11 +81,11 @@ public static class Utils
 	public static PlayerList GetPlayerListFromFiles()
 	{
 		PlayerList playerList = new();
-		Dictionary<ProfileName, ZNet.PlayerInfo> playerInfos = ZNet.m_instance.m_players.ToDictionary(p => new ProfileName { id = p.m_host, name = p.m_name }, p => p);
+		Dictionary<ProfileName, ZNet.PlayerInfo> playerInfos = ZNet.m_instance.m_players.ToDictionary(p => new ProfileName { id = p.m_host, name = p.m_name.ToLower() }, p => p);
 		foreach (string s in Directory.GetFiles(CharacterSavePath))
 		{
 			FileInfo file = new(s);
-			if (Utils.IsServerCharactersFilePattern(file.Name))
+			if (IsServerCharactersFilePattern(file.Name))
 			{
 				WebinterfacePlayer player = new();
 
