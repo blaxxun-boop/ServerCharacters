@@ -15,11 +15,12 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.2.8";
+	private const string ModVersion = "1.2.9";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
 	public static ManualLogSource logger => selfReference.Logger;
+	private static readonly Harmony harmony = new(ModGUID);
 
 	private float fixedUpdateCount = 0;
 	public int tickCount = int.MaxValue;
@@ -93,7 +94,6 @@ public class ServerCharacters : BaseUnityPlugin
 		serverListenAddress = config("1 - General", "Webinterface listen address", "127.0.0.1:5982", new ConfigDescription("The address the webinterface API should listen on. Clear this value, if you don't use the webinterface.", null, new ConfigurationManagerAttributes()), false);
 
 		Assembly assembly = Assembly.GetExecutingAssembly();
-		Harmony harmony = new(ModGUID);
 		harmony.PatchAll(assembly);
 
 		FileSystemWatcher maintenanceFileWatcher = new(pluginDir, "maintenance");
@@ -113,6 +113,13 @@ public class ServerCharacters : BaseUnityPlugin
 		characterTemplateWatcher.EnableRaisingEvents = true;
 
 		ServerSide.generateServerKey();
+
+		harmony.Patch(AccessTools.DeclaredMethod(typeof(FejdStartup), nameof(Awake)), postfix: new HarmonyMethod(AccessTools.DeclaredMethod(typeof(ServerCharacters), nameof(Initialize))));
+	}
+
+	public static void Initialize()
+	{
+		harmony.Unpatch(AccessTools.DeclaredMethod(typeof(FejdStartup), nameof(Awake)), HarmonyPatchType.Postfix, harmony.Id);
 
 		if (!serverListenAddress.Value.IsNullOrWhiteSpace())
 		{

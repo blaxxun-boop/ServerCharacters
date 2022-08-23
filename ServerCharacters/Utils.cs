@@ -49,7 +49,7 @@ public static class Utils
 		ServerCharacters.logger.LogMessage(message);
 	}
 
-	public static readonly string CharacterSavePath = PlayerProfile.GetCharacterFolderPath(FileHelpers.FileSource.Local);
+	public static string CharacterSavePath => PlayerProfile.GetCharacterFolderPath(FileHelpers.FileSource.Local);
 
 	public static bool IsServerCharactersFilePattern(string file) => file.Contains("_") && file.EndsWith(".fch", StringComparison.Ordinal) && !file.Contains("_backup_");
 
