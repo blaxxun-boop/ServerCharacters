@@ -342,9 +342,13 @@ public static class ClientSide
 		}
 	}
 
-	[HarmonyPatch(typeof(ZSteamSocket), nameof(ZSteamSocket.Close))]
+	[HarmonyPatch]
 	private class EnableSocketLinger
 	{
+		private static void dummy() { }
+
+		private static MethodInfo TargetMethod() => Type.GetType(nameof(ZSteamSocket) + ", assembly_valheim") is { } steamSocket ? AccessTools.DeclaredMethod(steamSocket, nameof(ZSteamSocket.Close)) : AccessTools.DeclaredMethod(typeof(EnableSocketLinger), nameof(dummy));
+
 		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codeInstructions)
 		{
 			MethodInfo socketClose = AccessTools.Method(typeof(SteamNetworkingSockets), nameof(SteamNetworkingSockets.CloseConnection));

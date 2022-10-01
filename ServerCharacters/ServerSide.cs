@@ -35,7 +35,7 @@ public static class ServerSide
 				if (ServerCharacters.maintenanceMode.GetToggle() && !isAdmin(peer.m_rpc))
 				{
 					peer.m_rpc.Invoke("Error", ServerCharacters.MaintenanceDisconnectMagic);
-					Utils.Log($"Non-admin client {peer.m_rpc.GetSocket().GetHostName()} tried to connect during maintenance and got disconnected");
+					Utils.Log($"Non-admin client {Utils.GetPlayerID(peer.m_rpc.GetSocket().GetHostName())} tried to connect during maintenance and got disconnected");
 					__instance.Disconnect(peer);
 				}
 
@@ -76,20 +76,20 @@ public static class ServerSide
 			PlayerProfile profile = new(fileSource: FileHelpers.FileSource.Local);
 			if (!profile.LoadPlayerProfileFromBytes(profileData))
 			{
-				Utils.Log($"Encountered invalid data for bytes from steam ID {peerRpc.m_socket.GetHostName()}");
+				Utils.Log($"Encountered invalid data for bytes from steam ID {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())}");
 				// invalid data ...
 				return null;
 			}
 
-			if (Shared.CharacterNameIsForbidden(profile.GetName()))
+			if (Shared.CharacterNameIsForbidden(profile.GetNameUncensored()))
 			{
 				peerRpc.Invoke("Error", ServerCharacters.CharacterNameDisconnectMagic);
 				ZNet.instance.Disconnect(ZNet.instance.GetPeer(peerRpc));
-				Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to connect with a bad profile name '{profile.GetName()}' and got disconnected");
+				Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} tried to connect with a bad profile name '{profile.GetNameUncensored()}' and got disconnected");
 				return null;
 			}
 
-			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName().ToLower();
+			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetNameUncensored().ToLower();
 			profile.SavePlayerToDisk();
 			Utils.Log($"Saved player profile data for {profile.m_filename}");
 
@@ -107,25 +107,25 @@ public static class ServerSide
 			long profileSavedTicks = VerifySignature(profileData, signature);
 			if (profileSavedTicks <= 0)
 			{
-				Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an emergency backup, but signature was invalid. Skipping.");
+				Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} tried to restore an emergency backup, but signature was invalid. Skipping.");
 				return;
 			}
 
 			PlayerProfile profile = new(fileSource: FileHelpers.FileSource.Local);
-			if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.GetName()))
+			if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.GetNameUncensored()))
 			{
 				// invalid data ...
-				Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an emergency backup, but the profile data is corrupted.");
+				Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} tried to restore an emergency backup, but the profile data is corrupted.");
 				return;
 			}
 
-			profile.m_filename = peerRpc.GetSocket().GetHostName() + "_" + profile.GetName().ToLower();
+			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetNameUncensored().ToLower();
 
 			string profilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
 			FileInfo profileFileInfo = new(profilePath);
 			if (!profileFileInfo.Exists)
 			{
-				Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an emergency backup for the character '{profile.m_filename}' that does not belong to this server. Skipping.");
+				Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} tried to restore an emergency backup for the character '{profile.m_filename}' that does not belong to this server. Skipping.");
 				return;
 			}
 
@@ -134,7 +134,7 @@ public static class ServerSide
 			if (profileSavedTime <= lastModification)
 			{
 				// profile too old
-				Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} tried to restore an old emergency backup. Skipping.");
+				Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} tried to restore an old emergency backup. Skipping.");
 				return;
 			}
 
@@ -148,7 +148,7 @@ public static class ServerSide
 			PatchPlayerProfileInventory(profile, inventory);
 
 			profile.SavePlayerToDisk();
-			Utils.Log($"Client {peerRpc.GetSocket().GetHostName()} succesfully restored an emergency backup for {profile.m_filename}.");
+			Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} succesfully restored an emergency backup for {profile.m_filename}.");
 		}
 
 		private static long VerifySignature(byte[] profileData, byte[] signature)
@@ -176,7 +176,7 @@ public static class ServerSide
 	
 	private static bool isAdmin(ZRpc? rpc)
 	{
-		return rpc is null || ZNet.instance.m_adminList.Contains(rpc.GetSocket().GetHostName());
+		return rpc is null || ZNet.instance.ListContainsId(ZNet.instance.m_adminList, rpc.GetSocket().GetHostName());
 	}
 
 	public static void onGiveItem(ZRpc? peerRpc, string itemName, int itemQuantity, string targetPlayerName, string targetPlayerId)
@@ -189,7 +189,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || Utils.GetPlayerID(player.m_socket.GetHostName()) == Utils.GetPlayerID(targetPlayerId)))
 			{
 				player.m_rpc.Invoke("ServerCharacters GiveItem", itemName, itemQuantity);
 				return;
@@ -207,7 +207,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || Utils.GetPlayerID(player.m_socket.GetHostName()) == Utils.GetPlayerID(targetPlayerId)))
 			{
 				peerRpc.Invoke("ServerCharacters GetPlayerPos", player.GetRefPos());
 				return;
@@ -227,7 +227,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || Utils.GetPlayerID(player.m_socket.GetHostName()) == Utils.GetPlayerID(targetPlayerId)))
 			{
 				player.m_rpc.Invoke("ServerCharacters TeleportTo", pos);
 				peerRpc.Invoke("ServerCharacters SendOwnPos", player.GetRefPos());
@@ -248,7 +248,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (targetPlayerName == "" || string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (targetPlayerName == "" || string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || Utils.GetPlayerID(player.m_socket.GetHostName()) == Utils.GetPlayerID(targetPlayerId)))
 			{
 				player.m_rpc.Invoke("ServerCharacters ResetSkill", skillName);
 			}
@@ -263,9 +263,9 @@ public static class ServerSide
 				if (Utils.IsServerCharactersFilePattern(file.Name))
 				{
 					string[] parts = file.Name.Split('_');
-					string Id = parts[0];
-					string Name = parts[1].Split('.')[0];
-					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || string.Compare(targetPlayerName, Name, StringComparison.InvariantCultureIgnoreCase) == 0))
+					string Id = $"{parts[0]}_{parts[1]}";
+					string Name = parts[2].Split('.')[0];
+					if ((targetPlayerId == "0" || Utils.GetPlayerID(targetPlayerId) == Id) && (targetPlayerName == "" || string.Compare(targetPlayerName, Name, StringComparison.InvariantCultureIgnoreCase) == 0))
 					{
 						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}", FileHelpers.FileSource.Local);
 						profile.LoadPlayerFromDisk();
@@ -298,7 +298,7 @@ public static class ServerSide
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
-			if (targetPlayerName == "" || string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || player.m_socket.GetHostName() == targetPlayerId))
+			if (targetPlayerName == "" || string.Compare(targetPlayerName, player.m_playerName, StringComparison.InvariantCultureIgnoreCase) == 0 && (targetPlayerId == "0" || Utils.GetPlayerID(player.m_socket.GetHostName()) == Utils.GetPlayerID(targetPlayerId)))
 			{
 				player.m_rpc.Invoke("ServerCharacters RaiseSkill", skill, level);
 			}
@@ -313,9 +313,9 @@ public static class ServerSide
 				if (Utils.IsServerCharactersFilePattern(file.Name))
 				{
 					string[] parts = file.Name.Split('_');
-					string Id = parts[0];
-					string Name = parts[1].Split('.')[0];
-					if ((targetPlayerId == "0" || targetPlayerId == Id) && (targetPlayerName == "" || string.Compare(targetPlayerName, Name, StringComparison.InvariantCultureIgnoreCase) == 0))
+					string Id = $"{parts[0]}_{parts[1]}";
+					string Name = parts[2].Split('.')[0];
+					if ((targetPlayerId == "0" || Utils.GetPlayerID(targetPlayerId) == Id) && (targetPlayerName == "" || string.Compare(targetPlayerName, Name, StringComparison.InvariantCultureIgnoreCase) == 0))
 					{
 						PlayerProfile profile = new($"{file.Name.Replace(".fch", "")}", FileHelpers.FileSource.Local);
 						profile.LoadPlayerFromDisk();
@@ -394,14 +394,18 @@ public static class ServerSide
 
 			public void Send(ZPackage pkg)
 			{
+				int oldPos = pkg.GetPos();
 				pkg.SetPos(0);
 				int methodHash = pkg.ReadInt();
-				if ((methodHash == "PeerInfo".GetStableHashCode() || methodHash == "RoutedRPC".GetStableHashCode()) && !finished)
+				if ((methodHash == "PeerInfo".GetStableHashCode() || methodHash == "RoutedRPC".GetStableHashCode() || methodHash == "ZDOData".GetStableHashCode()) && !finished)
 				{
-					Package.Add(new ZPackage(pkg.GetArray())); // the original ZPackage gets reused, create a new one
+					ZPackage newPkg = new(pkg.GetArray());
+					newPkg.SetPos(oldPos);
+					Package.Add(newPkg); // the original ZPackage gets reused, create a new one
 				}
 				else
 				{
+					pkg.SetPos(oldPos);
 					Original.Send(pkg);
 				}
 			}
@@ -432,13 +436,13 @@ public static class ServerSide
 			{
 				if (peer.m_uid != 0)
 				{
-					PlayerProfile playerProfile = new(peer.m_socket.GetHostName() + "_" + peer.m_playerName.ToLower(), FileHelpers.FileSource.Local);
+					PlayerProfile playerProfile = new(Utils.GetPlayerID(peer.m_socket.GetHostName()) + "_" + peer.m_playerName.ToLower(), FileHelpers.FileSource.Local);
 					byte[] playerProfileData = playerProfile.LoadPlayerDataFromDisk()?.GetArray() ?? Array.Empty<byte>();
 
-					if (playerProfileData.Length == 0 && ServerCharacters.singleCharacterMode.GetToggle() && !__instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()) && Utils.GetPlayerListFromFiles().playerLists.Any(p => p.Id == peer.m_rpc.GetSocket().GetHostName()))
+					if (playerProfileData.Length == 0 && ServerCharacters.singleCharacterMode.GetToggle() && !__instance.ListContainsId(__instance.m_adminList, peer.m_rpc.GetSocket().GetHostName()) && Utils.GetPlayerListFromFiles().playerLists.Any(p => p.Id == Utils.GetPlayerID(peer.m_rpc.GetSocket().GetHostName())))
 					{
 						peer.m_rpc.Invoke("Error", ServerCharacters.SingleCharacterModeDisconnectMagic);
-						Utils.Log($"Non-admin client {peer.m_rpc.GetSocket().GetHostName()} tried to create a second character and got disconnected");
+						Utils.Log($"Non-admin client {Utils.GetPlayerID(peer.m_rpc.GetSocket().GetHostName())} tried to create a second character and got disconnected");
 						__instance.Disconnect(peer);
 						yield break;
 					}
@@ -562,7 +566,8 @@ public static class ServerSide
 			Utils.Log($"Backed up a player profile in '{fileName}'");
 		}
 
-		Utils.Cache.profiles[new Utils.ProfileName { id = profile.m_filename.Split('_')[0], name = profile.GetName() }] = profile;
+		string[] parts = profile.m_filename.Split('_');
+		Utils.Cache.profiles[new Utils.ProfileName { id = $"{parts[0]}_{parts[1]}", name = profile.GetNameUncensored() }] = profile;
 	}
 
 	public static void generateServerKey()

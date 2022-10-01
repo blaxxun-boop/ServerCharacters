@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -15,7 +16,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.2.9";
+	private const string ModVersion = "1.3.0";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -30,7 +31,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.2.5" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.3.0" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -144,21 +145,23 @@ public class ServerCharacters : BaseUnityPlugin
 		foreach (string s in Directory.GetFiles(Utils.CharacterSavePath))
 		{
 			FileInfo file = new(s);
+			if (file.Name.EndsWith(".fch", StringComparison.Ordinal) && Regex.IsMatch(file.Name.Split('_')[0], @"^\d+$"))
+			{
+				string newPath = file.DirectoryName + Path.DirectorySeparatorChar + "Steam_" + file.Name;
+				file.MoveTo(newPath);
+			}
+		}
+
+		foreach (string s in Directory.GetFiles(Utils.CharacterSavePath))
+		{
+			FileInfo file = new(s);
 			if (Utils.IsServerCharactersFilePattern(file.Name))
 			{
-				string lowerName = file.Name.ToLower();
-				if (lowerName != file.Name)
-				{
-					string newPath = file.DirectoryName + Path.DirectorySeparatorChar + lowerName;
-					file.MoveTo(newPath);
-					file = new FileInfo(newPath);
-				}
-
 				Utils.ProfileName profileName = new();
 
 				string[] parts = file.Name.Split('_');
-				profileName.id = parts[0];
-				profileName.name = parts[1].Split('.')[0];
+				profileName.id = $"{parts[0]}_{parts[1]}";
+				profileName.name = parts[2].Split('.')[0];
 				PlayerProfile profile = new(file.Name.Replace(".fch", ""), FileHelpers.FileSource.Local);
 				profile.Load();
 				Utils.Cache.profiles[profileName] = profile;
@@ -246,10 +249,10 @@ public class ServerCharacters : BaseUnityPlugin
 			{
 				foreach (ZNetPeer peer in ZNet.instance.GetPeers())
 				{
-					if (!ZNet.instance.m_adminList.Contains(peer.m_rpc.GetSocket().GetHostName()))
+					if (!ZNet.instance.ListContainsId(ZNet.instance.m_adminList, peer.m_rpc.GetSocket().GetHostName()))
 					{
 						ZNet.instance.InternalKick(peer);
-						Utils.Log($"Kicked non-admin client {peer.m_rpc.GetSocket().GetHostName()}, reason: Maintenance started.");
+						Utils.Log($"Kicked non-admin client {Utils.GetPlayerID(peer.m_rpc.GetSocket().GetHostName())}, reason: Maintenance started.");
 					}
 				}
 

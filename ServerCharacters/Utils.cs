@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text.RegularExpressions;
 using BepInEx.Configuration;
 using JetBrains.Annotations;
 using UnityEngine;
@@ -51,14 +52,14 @@ public static class Utils
 
 	public static string CharacterSavePath => PlayerProfile.GetCharacterFolderPath(FileHelpers.FileSource.Local);
 
-	public static bool IsServerCharactersFilePattern(string file) => file.Contains("_") && file.EndsWith(".fch", StringComparison.Ordinal) && !file.Contains("_backup_");
+	public static bool IsServerCharactersFilePattern(string file) => file.Split('_').Length >= 3 && file.EndsWith(".fch", StringComparison.Ordinal) && !file.Contains("_backup_");
 
 	public struct ProfileName
 	{
 		[UsedImplicitly] public string id;
 		[UsedImplicitly] public string name;
 
-		public static ProfileName fromPeer(ZNetPeer peer) => new() { id = peer.m_socket.GetHostName(), name = peer.m_playerName };
+		public static ProfileName fromPeer(ZNetPeer peer) => new() { id = Utils.GetPlayerID(peer.m_socket.GetHostName()), name = peer.m_playerName };
 	}
 
 	public static class Cache
@@ -90,8 +91,8 @@ public static class Utils
 				WebinterfacePlayer player = new();
 
 				string[] parts = file.Name.Split('_');
-				player.Id = parts[0];
-				player.Name = parts[1].Split('.')[0];
+				player.Id = $"{parts[0]}_{parts[1]}";
+				player.Name = parts[2].Split('.')[0];
 				ProfileName profileName = new() { id = player.Id, name = player.Name };
 				bool loggedIn = playerInfos.TryGetValue(profileName, out ZNet.PlayerInfo playerInfo);
 				PlayerProfile profile = Cache.loadProfile(profileName);
@@ -116,5 +117,15 @@ public static class Utils
 		}
 
 		return playerList;
+	}
+
+	public static string GetPlayerID(string player)
+	{
+		if (Regex.IsMatch(player, @"^\d+$"))
+		{
+			player = "Steam_" + player;
+		}
+
+		return player;
 	}
 }
