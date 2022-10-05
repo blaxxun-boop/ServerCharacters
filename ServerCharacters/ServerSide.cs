@@ -81,15 +81,15 @@ public static class ServerSide
 				return null;
 			}
 
-			if (Shared.CharacterNameIsForbidden(profile.GetNameUncensored()))
+			if (Shared.CharacterNameIsForbidden(profile.GetName()))
 			{
 				peerRpc.Invoke("Error", ServerCharacters.CharacterNameDisconnectMagic);
 				ZNet.instance.Disconnect(ZNet.instance.GetPeer(peerRpc));
-				Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} tried to connect with a bad profile name '{profile.GetNameUncensored()}' and got disconnected");
+				Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} tried to connect with a bad profile name '{profile.GetName()}' and got disconnected");
 				return null;
 			}
 
-			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetNameUncensored().ToLower();
+			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetName().ToLower();
 			profile.SavePlayerToDisk();
 			Utils.Log($"Saved player profile data for {profile.m_filename}");
 
@@ -112,14 +112,14 @@ public static class ServerSide
 			}
 
 			PlayerProfile profile = new(fileSource: FileHelpers.FileSource.Local);
-			if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.GetNameUncensored()))
+			if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.GetName()))
 			{
 				// invalid data ...
 				Utils.Log($"Client {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())} tried to restore an emergency backup, but the profile data is corrupted.");
 				return;
 			}
 
-			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetNameUncensored().ToLower();
+			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetName().ToLower();
 
 			string profilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
 			FileInfo profileFileInfo = new(profilePath);
@@ -567,7 +567,7 @@ public static class ServerSide
 		}
 
 		string[] parts = profile.m_filename.Split('_');
-		Utils.Cache.profiles[new Utils.ProfileName { id = $"{parts[0]}_{parts[1]}", name = profile.GetNameUncensored() }] = profile;
+		Utils.Cache.profiles[new Utils.ProfileName { id = parts.Length > 1 ? $"{parts[0]}_{parts[1]}" : parts[0], name = profile.GetName() }] = profile;
 	}
 
 	public static void generateServerKey()
