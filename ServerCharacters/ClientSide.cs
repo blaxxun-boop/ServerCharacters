@@ -554,7 +554,7 @@ public static class ClientSide
 				return;
 			}
 			acquireCharacterFromTemplate = false;
-			
+
 			Player.m_localPlayer.m_inventory.RemoveAll();
 			Player.m_localPlayer.m_skills.m_skillData.Clear();
 			Player.m_localPlayer.m_knownMaterial.Clear();
@@ -564,7 +564,7 @@ public static class ClientSide
 			Player.m_localPlayer.m_uniques.Clear();
 			Player.m_localPlayer.m_trophies.Clear();
 			Player.m_localPlayer.GiveDefaultItems();
-			
+
 			try
 			{
 				PlayerTemplate? template = new DeserializerBuilder().IgnoreFields().Build().Deserialize<PlayerTemplate?>(ServerCharacters.playerTemplate.Value);
@@ -910,6 +910,40 @@ public static class ClientSide
 				iDied = true;
 				Game.instance.Invoke(nameof(Game.Logout), 1);
 			}
+		}
+	}
+
+	[HarmonyPatch(typeof(Player), nameof(Player.SetLocalPlayer))]
+	private static class MonitorPlayerActivity
+	{
+		private static Vector3 lastPos = Vector3.zero;
+		private static int counter = 0;
+
+		private static IEnumerator MeasureActivity()
+		{
+			for (;;)
+			{
+				if (Player.m_localPlayer && lastPos != Player.m_localPlayer.transform.position)
+				{
+					lastPos = Player.m_localPlayer.transform.position;
+					counter = 0;
+				}
+				else if (++counter >= ServerCharacters.afkKickTimer.Value && ServerCharacters.afkKickTimer.Value > 0)
+				{
+					Game.instance.Logout();
+					ZNet.m_connectionStatus = ZNet.ConnectionStatus.ErrorDisconnected;
+					connectionError = "You have been logged out due to inactivity.";
+					counter = 0;
+				}
+
+				yield return new WaitForSeconds(60);
+			}
+			// ReSharper disable once IteratorNeverReturns
+		}
+
+		private static void Postfix(Player __instance)
+		{
+			__instance.StartCoroutine(MeasureActivity());
 		}
 	}
 }

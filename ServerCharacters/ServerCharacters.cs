@@ -16,7 +16,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.3.1";
+	private const string ModVersion = "1.3.2";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -31,7 +31,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.3.0" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.3.2" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -41,6 +41,7 @@ public class ServerCharacters : BaseUnityPlugin
 	private static ConfigEntry<int> maintenanceTimer = null!;
 	public static ConfigEntry<int> backupsToKeep = null!;
 	public static ConfigEntry<int> autoSaveInterval = null!;
+	public static ConfigEntry<int> afkKickTimer = null!;
 	public static ConfigEntry<string> webhookURL = null!;
 	public static ConfigEntry<string> webhookUsername = null!;
 	private static ConfigEntry<string> maintenanceEnabledText = null!;
@@ -85,6 +86,7 @@ public class ServerCharacters : BaseUnityPlugin
 		backupOnlyMode = config("1 - General", "Backup only mode", Toggle.Off, "Enabling this will not enforce the server profile anymore. DO NOT ENABLE THIS IF YOU DON'T KNOW EXACTLY WHAT YOU ARE DOING!");
 		backupsToKeep = config("1 - General", "Number of backups to keep", 25, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(1, 50)));
 		autoSaveInterval = config("1 - General", "Auto save interval", 20, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 30)));
+		afkKickTimer = config("1 - General", "AFK Kick Timer", 0, new ConfigDescription("Automatically kicks players, if they haven't moved at all in the configured time. In minutes. 0 is disabled.", new AcceptableValueRange<int>(0, 30)));
 		webhookURL = config("1 - General", "Discord Webhook URL", "", new ConfigDescription("Discord API endpoint to announce maintenance.", null, new ConfigurationManagerAttributes()), false);
 		webhookUsername = config("1 - General", "Username to use for Discord", "Maintenance Bot", new ConfigDescription("Username to be used for maintenance related posts to Discord.", null, new ConfigurationManagerAttributes()), false);
 		maintenanceEnabledText = config("1 - General", "Maintenance enabled text", "Maintenance mode enabled. All non-admins will be disconnected in {time}.", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'On'. Leave empty to not post anything. Use {time} for the time until the maintenance starts.", null, new ConfigurationManagerAttributes()), false);

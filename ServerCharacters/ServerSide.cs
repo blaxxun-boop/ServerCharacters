@@ -58,7 +58,7 @@ public static class ServerSide
 				peer.m_rpc.Invoke("ServerCharacters KeyExchange", package);
 			}
 		}
-		
+
 		private static void onPlayerDied(ZRpc peerRpc, byte[] profileData)
 		{
 			PlayerProfile? profile = onReceivedProfile(peerRpc, profileData);
@@ -173,7 +173,7 @@ public static class ServerSide
 			return profileHash.SequenceEqual(decryptedHash) ? time : 0;
 		}
 	}
-	
+
 	private static bool isAdmin(ZRpc? rpc)
 	{
 		return rpc is null || ZNet.instance.ListContainsId(ZNet.instance.m_adminList, rpc.GetSocket().GetHostName());
@@ -185,7 +185,7 @@ public static class ServerSide
 		{
 			return;
 		}
-		
+
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -203,7 +203,7 @@ public static class ServerSide
 		{
 			return;
 		}
-		
+
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -223,7 +223,7 @@ public static class ServerSide
 		{
 			return;
 		}
-		
+
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -244,7 +244,7 @@ public static class ServerSide
 		{
 			return;
 		}
-		
+
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -294,7 +294,7 @@ public static class ServerSide
 		{
 			return;
 		}
-		
+
 		List<ZNetPeer> onlinePlayers = ZNet.m_instance.m_peers;
 		foreach (ZNetPeer player in onlinePlayers)
 		{
@@ -368,6 +368,7 @@ public static class ServerSide
 		private class BufferingSocket : ISocket
 		{
 			public volatile bool finished = false;
+			public volatile int versionMatchQueued = -1;
 			public readonly List<ZPackage> Package = new();
 			public readonly ISocket Original;
 
@@ -391,6 +392,18 @@ public static class ServerSide
 			public int GetHostPort() => Original.GetHostPort();
 			public bool Flush() => Original.Flush();
 			public string GetHostName() => Original.GetHostName();
+
+			public void VersionMatch()
+			{
+				if (finished)
+				{
+					Original.VersionMatch();
+				}
+				else
+				{
+					versionMatchQueued = Package.Count;
+				}
+			}
 
 			public void Send(ZPackage pkg)
 			{
@@ -417,7 +430,11 @@ public static class ServerSide
 			if (__instance.IsServer())
 			{
 				__state = new BufferingSocket(rpc.GetSocket());
-				AccessTools.DeclaredField(typeof(ZRpc), nameof(ZRpc.m_socket)).SetValue(rpc, __state);
+				rpc.m_socket = __state;
+				if (ZNet.instance.GetPeer(rpc) is { } peer && ZNet.m_onlineBackend != OnlineBackendType.Steamworks)
+				{
+					peer.m_socket = __state;
+				}
 			}
 		}
 
@@ -462,14 +479,23 @@ public static class ServerSide
 				if (rpc.GetSocket() is BufferingSocket bufferingSocket)
 				{
 					rpc.m_socket = bufferingSocket.Original;
+					peer.m_socket = bufferingSocket.Original;
 				}
 
 				bufferingSocket = __state;
 				bufferingSocket.finished = true;
 
-				foreach (ZPackage package in bufferingSocket.Package)
+				for (int i = 0; i < bufferingSocket.Package.Count; ++i)
 				{
-					bufferingSocket.Original.Send(package);
+					if (i == bufferingSocket.versionMatchQueued)
+					{
+						bufferingSocket.Original.VersionMatch();
+					}
+					bufferingSocket.Original.Send(bufferingSocket.Package[i]);
+				}
+				if (bufferingSocket.Package.Count == bufferingSocket.versionMatchQueued)
+				{
+					bufferingSocket.Original.VersionMatch();
 				}
 			}
 
@@ -525,7 +551,7 @@ public static class ServerSide
 		[HarmonyPriority(Priority.Last)]
 		private static void Postfix(ref string __result)
 		{
-			if (ZNet.instance?.IsServer() == true)
+			if (ZNet.instance?.IsServer() == true && (ZNet.instance.m_hostSocket != null || !ZNet.m_openServer))
 			{
 				__result += "-ServerCharacters";
 			}
