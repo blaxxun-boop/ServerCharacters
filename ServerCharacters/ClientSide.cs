@@ -928,7 +928,7 @@ public static class ClientSide
 					lastPos = Player.m_localPlayer.transform.position;
 					counter = 0;
 				}
-				else if (++counter >= ServerCharacters.afkKickTimer.Value && ServerCharacters.afkKickTimer.Value > 0)
+				else if (++counter >= ServerCharacters.afkKickTimer.Value && ServerCharacters.afkKickTimer.Value > 0 && !ZNet.m_isServer)
 				{
 					Game.instance.Logout();
 					ZNet.m_connectionStatus = ZNet.ConnectionStatus.ErrorDisconnected;
