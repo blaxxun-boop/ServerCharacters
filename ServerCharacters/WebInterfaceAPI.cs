@@ -214,20 +214,23 @@ public static class WebInterfaceAPI
 
 		public static void SendIngameMessage(IngameMessage message) => ExecuteOnMain(() =>
 		{
-			IEnumerable<ZNetPeer> peers = message.steamIds.Count == 0 ? ZNet.instance.m_peers : message.steamIds.Select(id => ZNet.instance.GetPeerByHostName(id));
-			foreach (ZNetPeer peer in peers)
+			IEnumerable<ZNetPeer?> peers = message.steamIds.Count == 0 ? ZNet.instance.m_peers : message.steamIds.Select(id => ZNet.instance.GetPeerByHostName(id) ?? (id.StartsWith("Steam_") ? ZNet.instance.GetPeerByHostName(id.Substring(6)) : null));
+			foreach (ZNetPeer? peer in peers)
 			{
-				peer.m_rpc.Invoke("ServerCharacters IngameMessage", message.Message);
+				peer?.m_rpc.Invoke("ServerCharacters IngameMessage", message.Message);
 			}
 		});
 
 		public static void KickPlayer(IngameMessage message) => ExecuteOnMain(() =>
 		{
-			IEnumerable<ZNetPeer> peers = message.steamIds.Count == 0 ? ZNet.instance.m_peers : message.steamIds.Select(id => ZNet.instance.GetPeerByHostName(id));
-			foreach (ZNetPeer peer in peers)
+			IEnumerable<ZNetPeer?> peers = message.steamIds.Count == 0 ? ZNet.instance.m_peers : message.steamIds.Select(id => ZNet.instance.GetPeerByHostName(id) ?? (id.StartsWith("Steam_") ? ZNet.instance.GetPeerByHostName(id.Substring(6)) : null));
+			foreach (ZNetPeer? peer in peers)
 			{
-				peer.m_rpc.Invoke("ServerCharacters KickMessage", message.Message);
-				ZNet.instance.Disconnect(peer);
+				if (peer is not null)
+				{
+					peer.m_rpc.Invoke("ServerCharacters KickMessage", message.Message);
+					ZNet.instance.Disconnect(peer);
+				}
 			}
 		});
 

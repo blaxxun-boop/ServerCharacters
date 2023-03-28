@@ -13,10 +13,11 @@ using UnityEngine;
 namespace ServerCharacters;
 
 [BepInPlugin(ModGUID, ModName, ModVersion)]
+[BepInIncompatibility("org.bepinex.plugins.valheim_plus")]
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.3.3";
+	private const string ModVersion = "1.4.0";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -31,7 +32,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.3.3" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.0" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -43,13 +44,19 @@ public class ServerCharacters : BaseUnityPlugin
 	public static ConfigEntry<int> autoSaveInterval = null!;
 	public static ConfigEntry<int> afkKickTimer = null!;
 	public static ConfigEntry<string> webhookURL = null!;
-	public static ConfigEntry<string> webhookUsername = null!;
+	public static ConfigEntry<string> webhookUsernameMaintenance = null!;
 	private static ConfigEntry<string> maintenanceEnabledText = null!;
 	private static ConfigEntry<string> maintenanceFinishedText = null!;
 	private static ConfigEntry<string> maintenanceAbortedText = null!;
 	private static ConfigEntry<string> maintenanceStartedText = null!;
+	public static ConfigEntry<string> loginMessage = null!;
+	public static ConfigEntry<string> firstLoginMessage = null!;
+	public static ConfigEntry<Toggle> postFirstLoginToWebhook = null!;
+	public static ConfigEntry<string> webhookUsernameOther = null!;
 	public static ConfigEntry<string> serverKey = null!;
 	public static ConfigEntry<string> serverListenAddress = null!;
+	public static ConfigEntry<Intro> newCharacterIntro = null!;
+	public static ConfigEntry<Toggle> storePoison = null!;
 
 	public static readonly CustomSyncedValue<string> playerTemplate = new(configSync, "PlayerTemplate", readCharacterTemplate());
 
@@ -78,23 +85,33 @@ public class ServerCharacters : BaseUnityPlugin
 		selfReference = this;
 		serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.On, "If on, the configuration is locked and can be changed by server admins only.");
 		configSync.AddLockingConfigEntry(serverConfigLocked);
-		maintenanceMode = config("1 - General", "Maintenance Mode", Toggle.Off, "If set to on, a timer will start. If the timer elapses, all non-admins will be disconnected, the world will be saved and only admins will be able to connect to the server, until maintenance mode is toggled to off.");
-		maintenanceMode.SettingChanged += toggleMaintenanceMode;
-		maintenanceTimer = config("1 - General", "Maintenance Timer", 300, new ConfigDescription("Time in seconds that has to pass, before the maintenance mode becomes active.", new AcceptableValueRange<int>(10, 1800)));
-		hardcoreMode = config("1 - General", "Hardcore mode", Toggle.Off, "If set to on, players will be kicked from the server and their save file on the server will be deleted, if they die.");
-		singleCharacterMode = config("1 - General", "Single Character Mode", Toggle.Off, "If set to on, each SteamID can create one character only on this server. Has no effect for admins.");
-		backupOnlyMode = config("1 - General", "Backup only mode", Toggle.Off, "Enabling this will not enforce the server profile anymore. DO NOT ENABLE THIS IF YOU DON'T KNOW EXACTLY WHAT YOU ARE DOING!");
-		backupsToKeep = config("1 - General", "Number of backups to keep", 25, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(1, 50)));
-		autoSaveInterval = config("1 - General", "Auto save interval", 20, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 30)));
 		afkKickTimer = config("1 - General", "AFK Kick Timer", 0, new ConfigDescription("Automatically kicks players, if they haven't moved at all in the configured time. In minutes. 0 is disabled.", new AcceptableValueRange<int>(0, 30)));
 		webhookURL = config("1 - General", "Discord Webhook URL", "", new ConfigDescription("Discord API endpoint to announce maintenance.", null, new ConfigurationManagerAttributes()), false);
-		webhookUsername = config("1 - General", "Username to use for Discord", "Maintenance Bot", new ConfigDescription("Username to be used for maintenance related posts to Discord.", null, new ConfigurationManagerAttributes()), false);
-		maintenanceEnabledText = config("1 - General", "Maintenance enabled text", "Maintenance mode enabled. All non-admins will be disconnected in {time}.", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'On'. Leave empty to not post anything. Use {time} for the time until the maintenance starts.", null, new ConfigurationManagerAttributes()), false);
-		maintenanceFinishedText = config("1 - General", "Maintenance finished text", "Maintenance has been disabled and the server is back online. Have fun!", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'Off'. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
-		maintenanceAbortedText = config("1 - General", "Maintenance aborted text", "Maintenance has been aborted.", new ConfigDescription("Message to be posted to Discord, when the maintenance has been aborted. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
-		maintenanceStartedText = config("1 - General", "Maintenance started text", "Maintenance has started and players will be unable to connect.", new ConfigDescription("Message to be posted to Discord, when the maintenance has begun. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
-		serverKey = config("1 - General", "Server key", "", new ConfigDescription("DO NOT TOUCH THIS! DO NOT SHARE THIS! Encryption key used for emergency profile backups. DO NOT SHARE THIS! DO NOT TOUCH THIS!", null, new ConfigurationManagerAttributes()), false);
-		serverListenAddress = config("1 - General", "Webinterface listen address", "127.0.0.1:5982", new ConfigDescription("The address the webinterface API should listen on. Clear this value, if you don't use the webinterface.", null, new ConfigurationManagerAttributes()), false);
+		loginMessage = config("1 - General", "Login Message", "I have arrived!", new ConfigDescription("Message to shout on login. Leave empty to not shout anything."));
+		webhookUsernameOther = config("1 - General", "Discord Username Other", "Server Characters", new ConfigDescription("Username to be used for non-maintenance related posts to Discord.", null, new ConfigurationManagerAttributes()), false);
+
+		hardcoreMode = config("2 - Save Files", "Hardcore mode", Toggle.Off, "If set to on, players will be kicked from the server and their save file on the server will be deleted, if they die.");
+		singleCharacterMode = config("2 - Save Files", "Single Character Mode", Toggle.Off, "If set to on, each SteamID / Xbox ID can create one character only on this server. Has no effect for admins.");
+		backupOnlyMode = config("2 - Save Files", "Backup only mode", Toggle.Off, "Enabling this will not enforce the server profile anymore. DO NOT ENABLE THIS IF YOU DON'T KNOW EXACTLY WHAT YOU ARE DOING!");
+		backupsToKeep = config("2 - Save Files", "Number of backups to keep", 25, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(1, 50)));
+		autoSaveInterval = config("2 - Save Files", "Auto save interval", 20, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 30)));
+		storePoison = config("2 - Save Files", "Store poison debuff", Toggle.On, new ConfigDescription("If on, poison debuffs are stored in the save file on logout and applied on login, to prevent users from logging out if they are poisoned, to clear the debuff."));
+
+		maintenanceMode = config("3 - Maintenance", "Maintenance Mode", Toggle.Off, "If set to on, a timer will start. If the timer elapses, all non-admins will be disconnected, the world will be saved and only admins will be able to connect to the server, until maintenance mode is toggled to off.");
+		maintenanceMode.SettingChanged += toggleMaintenanceMode;
+		maintenanceTimer = config("3 - Maintenance", "Maintenance Timer", 300, new ConfigDescription("Time in seconds that has to pass, before the maintenance mode becomes active.", new AcceptableValueRange<int>(10, 1800)));
+		webhookUsernameMaintenance = config("3 - Maintenance", "Discord Username Maintenance", "Maintenance Bot", new ConfigDescription("Username to be used for maintenance related posts to Discord.", null, new ConfigurationManagerAttributes()), false);
+		maintenanceEnabledText = config("3 - Maintenance", "Maintenance enabled text", "Maintenance mode enabled. All non-admins will be disconnected in {time}.", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'On'. Leave empty to not post anything. Use {time} for the time until the maintenance starts.", null, new ConfigurationManagerAttributes()), false);
+		maintenanceFinishedText = config("3 - Maintenance", "Maintenance finished text", "Maintenance has been disabled and the server is back online. Have fun!", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'Off'. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
+		maintenanceAbortedText = config("3 - Maintenance", "Maintenance aborted text", "Maintenance has been aborted.", new ConfigDescription("Message to be posted to Discord, when the maintenance has been aborted. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
+		maintenanceStartedText = config("3 - Maintenance", "Maintenance started text", "Maintenance has started and players will be unable to connect.", new ConfigDescription("Message to be posted to Discord, when the maintenance has begun. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
+		
+		firstLoginMessage = config("3 - First Login", "First Login Message", "A new player logged in for the first time: {name}", new ConfigDescription("Message to display if a player logs in for the very first time. Leave empty to not display anything."));
+		newCharacterIntro = config("3 - First Login", "Intro", Intro.ValkyrieAndIntro, new ConfigDescription("Sets the kind of intro new characters will get."));
+		postFirstLoginToWebhook = config("3 - First Login", "First Login Webhook", Toggle.Off, new ConfigDescription("If on, the first login message is posted to the webhook as well.", null, new ConfigurationManagerAttributes()), false);
+
+		serverKey = config("4 - Other", "Server key", "", new ConfigDescription("DO NOT TOUCH THIS! DO NOT SHARE THIS! Encryption key used for emergency profile backups. DO NOT SHARE THIS! DO NOT TOUCH THIS!", null, new ConfigurationManagerAttributes()), false);
+		serverListenAddress = config("4 - Other", "Webinterface listen address", "127.0.0.1:5982", new ConfigDescription("The address the webinterface API should listen on. Clear this value, if you don't use the webinterface.", null, new ConfigurationManagerAttributes()), false);
 
 		Assembly assembly = Assembly.GetExecutingAssembly();
 		harmony.PatchAll(assembly);
@@ -197,7 +214,7 @@ public class ServerCharacters : BaseUnityPlugin
 	{
 		if (maintenanceMode.GetToggle())
 		{
-			string text = $"Maintenance mode enabled. All non-admins will be disconnected in {Utils.getHumanFriendlyTime(maintenanceTimer.Value)}.";
+			string text = maintenanceEnabledText.Value.Replace("{time}", Utils.getHumanFriendlyTime(maintenanceTimer.Value));
 			Player.m_localPlayer?.Message(MessageHud.MessageType.Center, text);
 			Utils.Log(text);
 
@@ -208,7 +225,7 @@ public class ServerCharacters : BaseUnityPlugin
 			if (configSync.IsSourceOfTruth)
 			{
 				File.Create(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
-				Utils.PostToDiscord(maintenanceEnabledText.Value.Replace("{time}", Utils.getHumanFriendlyTime(maintenanceTimer.Value)));
+				Utils.PostToDiscord(text, webhookUsernameMaintenance.Value);
 			}
 		}
 		else
@@ -216,7 +233,7 @@ public class ServerCharacters : BaseUnityPlugin
 			if (configSync.IsSourceOfTruth)
 			{
 				File.Delete(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
-				Utils.PostToDiscord(tickCount <= maintenanceTimer.Value ? maintenanceAbortedText.Value : maintenanceFinishedText.Value);
+				Utils.PostToDiscord(tickCount <= maintenanceTimer.Value ? maintenanceAbortedText.Value : maintenanceFinishedText.Value, webhookUsernameMaintenance.Value);
 				WebInterfaceAPI.SendMaintenanceMessage(new Maintenance { startTime = 0, maintenanceActive = false });
 			}
 
@@ -260,7 +277,7 @@ public class ServerCharacters : BaseUnityPlugin
 
 				ZNet.instance.ConsoleSave();
 				Utils.Log("Maintenance started. World has been saved.");
-				Utils.PostToDiscord(maintenanceStartedText.Value);
+				Utils.PostToDiscord(maintenanceStartedText.Value, webhookUsernameMaintenance.Value);
 				WebInterfaceAPI.SendMaintenanceMessage(new Maintenance { startTime = DateTimeOffset.Now.ToUnixTimeSeconds(), maintenanceActive = true });
 			}
 

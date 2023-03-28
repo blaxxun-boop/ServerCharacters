@@ -24,7 +24,7 @@ public static class Utils
 		return (timeSpan.TotalMinutes >= 1 ? $"{(int)timeSpan.TotalMinutes} minute" + (timeSpan.TotalMinutes >= 2 ? "s" : "") + (timeSpan.Seconds != 0 ? " and " : "") : "") + (timeSpan.Seconds != 0 ? $"{timeSpan.Seconds} second" + (timeSpan.Seconds >= 2 ? "s" : "") : "");
 	}
 
-	public static void PostToDiscord(string content)
+	public static void PostToDiscord(string content, string username)
 	{
 		if (content == "" || ServerCharacters.webhookURL.Value == "")
 		{
@@ -40,7 +40,7 @@ public static class Utils
 			static string escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
 			using StreamWriter writer = new(t.Result);
-			string json = @"{""content"":""" + escape(content) + @"""" + (ServerCharacters.webhookUsername.Value == "" ? "" : @", ""username"":""" + escape(ServerCharacters.webhookUsername.Value) + @"""") + "}";
+			string json = @"{""content"":""" + escape(content) + @"""" + (username == "" ? "" : @", ""username"":""" + escape(username) + @"""") + "}";
 			writer.WriteAsync(json).ContinueWith(_ => discordAPI.GetResponseAsync());
 		});
 	}
@@ -82,7 +82,7 @@ public static class Utils
 	public static PlayerList GetPlayerListFromFiles()
 	{
 		PlayerList playerList = new();
-		Dictionary<ProfileName, ZNet.PlayerInfo> playerInfos = ZNet.m_instance.m_players.ToDictionary(p => new ProfileName { id = p.m_host, name = p.m_name.ToLower() }, p => p);
+		Dictionary<ProfileName, ZNet.PlayerInfo> playerInfos = ZNet.m_instance.m_players.ToDictionary(p => new ProfileName { id = GetPlayerID(p.m_host), name = p.m_name.ToLower() }, p => p);
 		foreach (string s in Directory.GetFiles(CharacterSavePath))
 		{
 			FileInfo file = new(s);
@@ -119,6 +119,7 @@ public static class Utils
 		return playerList;
 	}
 
+	// Adds the Steam_ prefix to steam IDs. Xbox IDs are prefixed with Xbox_ automatically.
 	public static string GetPlayerID(string player)
 	{
 		if (Regex.IsMatch(player, @"^\d+$"))

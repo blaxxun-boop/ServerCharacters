@@ -76,7 +76,7 @@ public static class ServerSide
 			PlayerProfile profile = new(fileSource: FileHelpers.FileSource.Local);
 			if (!profile.LoadPlayerProfileFromBytes(profileData))
 			{
-				Utils.Log($"Encountered invalid data for bytes from steam ID {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())}");
+				Utils.Log($"Encountered invalid data for bytes from ID {Utils.GetPlayerID(peerRpc.m_socket.GetHostName())}");
 				// invalid data ...
 				return null;
 			}
@@ -90,6 +90,10 @@ public static class ServerSide
 			}
 
 			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetName().ToLower();
+			if (!File.Exists(profile.GetPath()) && ServerCharacters.postFirstLoginToWebhook.Value == Toggle.On)
+			{
+				Utils.PostToDiscord(ServerCharacters.firstLoginMessage.Value.Replace("{name}", profile.GetName()), ServerCharacters.webhookUsernameOther.Value);
+			}
 			profile.SavePlayerToDisk();
 			Utils.Log($"Saved player profile data for {profile.m_filename}");
 

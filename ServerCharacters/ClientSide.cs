@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -14,6 +15,7 @@ using JetBrains.Annotations;
 using Steamworks;
 using UnityEngine;
 using YamlDotNet.Serialization;
+using Random = UnityEngine.Random;
 
 namespace ServerCharacters;
 
@@ -257,11 +259,11 @@ public static class ClientSide
 				}
 
 				args.Context.AddString("ServerCharacters console commands - use 'ServerCharacters' followed by one of the following options.");
-				args.Context.AddString("resetskill [skillname] [playername] [steamid] - resets the skill for the specified player. Steam ID is optional and only required, if multiple players have the same name. If no name is provided, the skill is reset for every character on the server, online and offline.");
-				args.Context.AddString("raiseskill [skillname] [level] [playername] [steamid] - raises the skill for the specified player by the specified level. Steam ID is optional and only required, if multiple players have the same name. If no name is provided, the skill is raised for every character on the server, online and offline.");
-				args.Context.AddString("teleport [playername] [steamid] - teleports you to the specified player. Quote names with a space. Steam ID is optional and only required, if multiple players have the same name.");
-				args.Context.AddString("summon [playername] [steamid] - teleports the specified player to you. Quote names with a space. Steam ID is optional and only required, if multiple players have the same name.");
-				args.Context.AddString("giveitem [itemname] [quantity] [playername] [steamid] - adds the specified item to the specified players inventory in the specified quantity. Quote names with a space. Steam ID is optional and only required, if multiple players have the same name. Will fail, if their inventory is full.");
+				args.Context.AddString("resetskill [skillname] [playername] [id] - resets the skill for the specified player. Steam / Xbox ID is optional and only required, if multiple players have the same name. If no name is provided, the skill is reset for every character on the server, online and offline.");
+				args.Context.AddString("raiseskill [skillname] [level] [playername] [id] - raises the skill for the specified player by the specified level. Steam / Xbox ID is optional and only required, if multiple players have the same name. If no name is provided, the skill is raised for every character on the server, online and offline.");
+				args.Context.AddString("teleport [playername] [steamid] - teleports you to the specified player. Quote names with a space. Steam / Xbox ID is optional and only required, if multiple players have the same name.");
+				args.Context.AddString("summon [playername] [steamid] - teleports the specified player to you. Quote names with a space. Steam / Xbox ID is optional and only required, if multiple players have the same name.");
+				args.Context.AddString("giveitem [itemname] [quantity] [playername] [id] - adds the specified item to the specified players inventory in the specified quantity. Quote names with a space. Steam / Xbox ID is optional and only required, if multiple players have the same name. Will fail, if their inventory is full.");
 			}), optionsFetcher: () => new List<string> { "resetskill", "teleport", "summon", "raiseskill", "giveitem" });
 		}
 	}
@@ -342,6 +344,30 @@ public static class ClientSide
 		}
 	}
 
+	[HarmonyPatch(typeof(ZNet), nameof(ZNet.Save))]
+	private static class DelayHaveStopped
+	{
+		private static bool delayed = false;
+
+		private static void Prefix(ZNet __instance, bool sync)
+		{
+			if (sync && !__instance.m_haveStoped)
+			{
+				__instance.m_haveStoped = true;
+				delayed = true;
+			}
+		}
+
+		private static void Finalizer(ZNet __instance)
+		{
+			if (delayed)
+			{
+				__instance.m_haveStoped = false;
+				delayed = false;
+			}
+		}
+	}
+
 	[HarmonyPatch]
 	private class EnableSocketLinger
 	{
@@ -378,6 +404,39 @@ public static class ClientSide
 		{
 			serverCharacter = false;
 			forceSynchronousSaving = false;
+		}
+	}
+
+	[HarmonyPatch(typeof(Player), nameof(Player.Save))]
+	private static class StorePoisonDebuff
+	{
+		private static void Prefix(Player __instance)
+		{
+			if (ServerCharacters.storePoison.GetToggle() && !__instance.IsDead() && __instance.m_seman.GetStatusEffect("Poison") is SE_Poison poison)
+			{
+				__instance.m_customData["ServerCharacters PoisonDamage"] = poison.m_damageLeft.ToString(CultureInfo.InvariantCulture);
+				__instance.m_customData["ServerCharacters PoisonDamageHit"] = poison.m_damagePerHit.ToString(CultureInfo.InvariantCulture);
+				__instance.m_customData["ServerCharacters PoisonTTL"] = poison.m_ttl.ToString(CultureInfo.InvariantCulture);
+			}
+		}
+	}
+
+	[HarmonyPatch(typeof(Player), nameof(Player.Load))]
+	private static class LoadPoisonDebuff
+	{
+		private static void Postfix(Player __instance)
+		{
+			if (ServerCharacters.storePoison.GetToggle() && __instance.m_customData.TryGetValue("ServerCharacters PoisonDamage", out string poisonString) && poisonString != "")
+			{
+				SE_Poison poison = (SE_Poison)__instance.m_seman.AddStatusEffect("Poison");
+				poison.m_damageLeft = float.Parse(__instance.m_customData["ServerCharacters PoisonDamage"], CultureInfo.InvariantCulture);
+				poison.m_damagePerHit = float.Parse(__instance.m_customData["ServerCharacters PoisonDamageHit"], CultureInfo.InvariantCulture);
+				poison.m_ttl = float.Parse(__instance.m_customData["ServerCharacters PoisonTTL"], CultureInfo.InvariantCulture);
+
+				__instance.m_customData.Remove("ServerCharacters PoisonDamage");
+				__instance.m_customData.Remove("ServerCharacters PoisonDamageHit");
+				__instance.m_customData.Remove("ServerCharacters PoisonTTL");
+			}
 		}
 	}
 
@@ -563,6 +622,7 @@ public static class ClientSide
 			Player.m_localPlayer.m_knownTexts.Clear();
 			Player.m_localPlayer.m_uniques.Clear();
 			Player.m_localPlayer.m_trophies.Clear();
+			Player.m_localPlayer.m_customData.Clear();
 			Player.m_localPlayer.GiveDefaultItems();
 
 			try
@@ -581,9 +641,13 @@ public static class ClientSide
 						inventory.AddItem(item.Key, item.Value, 1, 0, 0, "");
 					}
 
-					if (template.spawn is { } spawnPos)
+					if (template.spawn is { Count: > 0 } spawnPos)
 					{
-						Player.m_localPlayer.transform.position = new Vector3(spawnPos.x, spawnPos.y, spawnPos.z);
+						Random.State oldState = Random.state;
+						Random.InitState(UserInfo.GetLocalUser().NetworkUserId.GetStableHashCode());
+						int index = Random.Range(0, spawnPos.Count - 1);
+						Random.state = oldState;
+						Player.m_localPlayer.transform.position = new Vector3(spawnPos[index].x, spawnPos[index].y, spawnPos[index].z);
 					}
 				}
 			}
@@ -592,6 +656,14 @@ public static class ClientSide
 			}
 
 			Game.instance.SavePlayerProfile(true);
+
+			if (ServerCharacters.firstLoginMessage.Value != "")
+			{
+				foreach (Player p in Player.GetAllPlayers())
+				{
+					p.Message(MessageHud.MessageType.Center, ServerCharacters.firstLoginMessage.Value.Replace("{name}", Player.m_localPlayer.GetHoverName()));
+				}
+			}
 		}
 	}
 
@@ -613,14 +685,45 @@ public static class ClientSide
 					return;
 				}
 
-				if (template.spawn is { } spawnPos)
+				if (template.spawn is { Count: > 0 } spawnPos)
 				{
-					Player.m_localPlayer.transform.position = new Vector3(spawnPos.x, spawnPos.y, spawnPos.z);
+					Random.State oldState = Random.state;
+					Random.InitState(UserInfo.GetLocalUser().NetworkUserId.GetStableHashCode());
+					int index = Random.Range(0, spawnPos.Count - 1);
+					Random.state = oldState;
+					Player.m_localPlayer.transform.position = new Vector3(spawnPos[index].x, spawnPos[index].y, spawnPos[index].z);
 				}
 			}
 			catch (SerializationException)
 			{
 			}
+		}
+	}
+
+	[HarmonyPatch(typeof(Player), nameof(Player.Awake))]
+	private static class DisableValkyrieAndIntro
+	{
+		private static void Postfix(Player __instance)
+		{
+			if (ServerCharacters.newCharacterIntro.Value == Intro.Disabled)
+			{
+				__instance.m_valkyrie = null;
+			}
+		}
+	}
+
+	[HarmonyPatch(typeof(Valkyrie), nameof(Valkyrie.ShowText))]
+	private static class DisableIntro
+	{
+		private static bool Prefix(Valkyrie __instance)
+		{
+			if (ServerCharacters.newCharacterIntro.Value == Intro.Valkyrie)
+			{
+				__instance.m_startPause = 0;
+				return false;
+			}
+
+			return true;
 		}
 	}
 
@@ -638,9 +741,13 @@ public static class ClientSide
 					return false;
 				}
 
-				if (template.spawn is { } spawnPos)
+				if (template.spawn is { Count: > 0 } spawnPos)
 				{
-					pos = new Vector3(spawnPos.x, spawnPos.y, spawnPos.z);
+					Random.State oldState = Random.state;
+					Random.InitState(UserInfo.GetLocalUser().NetworkUserId.GetStableHashCode());
+					int index = Random.Range(0, spawnPos.Count - 1);
+					Random.state = oldState;
+					pos = new Vector3(spawnPos[index].x, spawnPos[index].y, spawnPos[index].z);
 					return true;
 				}
 			}
@@ -718,6 +825,40 @@ public static class ClientSide
 				__instance.m_knownStations.Clear();
 				__instance.Load(playerSave);
 				playerSave = null;
+			}
+		}
+	}
+
+	[HarmonyPatch(typeof(Game), nameof(Game.UpdateRespawn))]
+	private static class ChangeSpawnShoutMessage
+	{
+		private static string ReplaceMessage(string original) => ServerCharacters.loginMessage.Value == "I have arrived!" ? original : ServerCharacters.loginMessage.Value;
+
+		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilg)
+		{
+			MethodInfo sendText = AccessTools.DeclaredMethod(typeof(Chat), nameof(Chat.SendText));
+			foreach (CodeInstruction instruction in instructions)
+			{
+				if (instruction.Calls(sendText))
+				{
+					Label skipLabel = ilg.DefineLabel();
+					Label endLabel = ilg.DefineLabel();
+					yield return new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(ChangeSpawnShoutMessage), nameof(ReplaceMessage)));
+					yield return new CodeInstruction(OpCodes.Dup);
+					yield return new CodeInstruction(OpCodes.Ldstr, "");
+					yield return new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(string), nameof(string.Equals), new[] { typeof(string), typeof(string) }));
+					yield return new CodeInstruction(OpCodes.Brtrue, skipLabel);
+					yield return instruction;
+					yield return new CodeInstruction(OpCodes.Br, endLabel);
+					yield return new CodeInstruction(OpCodes.Pop) { labels = new List<Label> { skipLabel } };
+					yield return new CodeInstruction(OpCodes.Pop);
+					yield return new CodeInstruction(OpCodes.Pop);
+					yield return new CodeInstruction(OpCodes.Nop) { labels = new List<Label> { endLabel } };
+				}
+				else
+				{
+					yield return instruction;
+				}
 			}
 		}
 	}
@@ -946,4 +1087,5 @@ public static class ClientSide
 			__instance.StartCoroutine(MeasureActivity());
 		}
 	}
+
 }
