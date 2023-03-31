@@ -344,30 +344,6 @@ public static class ClientSide
 		}
 	}
 
-	[HarmonyPatch(typeof(ZNet), nameof(ZNet.Save))]
-	private static class DelayHaveStopped
-	{
-		private static bool delayed = false;
-
-		private static void Prefix(ZNet __instance, bool sync)
-		{
-			if (sync && !__instance.m_haveStoped)
-			{
-				__instance.m_haveStoped = true;
-				delayed = true;
-			}
-		}
-
-		private static void Finalizer(ZNet __instance)
-		{
-			if (delayed)
-			{
-				__instance.m_haveStoped = false;
-				delayed = false;
-			}
-		}
-	}
-
 	[HarmonyPatch]
 	private class EnableSocketLinger
 	{
@@ -375,9 +351,10 @@ public static class ClientSide
 
 		private static MethodInfo TargetMethod() => Type.GetType(nameof(ZSteamSocket) + ", assembly_valheim") is { } steamSocket ? AccessTools.DeclaredMethod(steamSocket, nameof(ZSteamSocket.Close)) : AccessTools.DeclaredMethod(typeof(EnableSocketLinger), nameof(dummy));
 
+		private static MethodInfo socketClose => AccessTools.Method(typeof(SteamNetworkingSockets), nameof(SteamNetworkingSockets.CloseConnection)); 
+		
 		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codeInstructions)
 		{
-			MethodInfo socketClose = AccessTools.Method(typeof(SteamNetworkingSockets), nameof(SteamNetworkingSockets.CloseConnection));
 			foreach (CodeInstruction instruction in codeInstructions)
 			{
 				if (instruction.opcode == OpCodes.Call && instruction.OperandIs(socketClose))
@@ -930,8 +907,15 @@ public static class ClientSide
 		private static bool originalValue = false;
 
 		[UsedImplicitly]
-		private static void Prefix(Game __instance, ref bool setLogoutPoint)
+		private static void Prefix(Game __instance, ref bool setLogoutPoint, out bool __state)
 		{
+			__state = ZNet.instance.m_haveStoped;
+			if (__instance.m_shuttingDown)
+			{
+				// Ensure PlayFab connections do *not* push the sending of player save onto the background compressing queue, but directly send it
+				ZNet.instance.m_haveStoped = true;
+			}
+			
 			if (ZNet.m_world == null || __instance.m_playerProfile.HaveLogoutPoint())
 			{
 				originalValue = true;
@@ -949,6 +933,12 @@ public static class ClientSide
 			{
 				__instance.m_playerProfile.ClearLoguoutPoint();
 			}
+		}
+
+		[UsedImplicitly]
+		private static void Finalizer(bool __state)
+		{
+			ZNet.instance.m_haveStoped = __state;
 		}
 	}
 
