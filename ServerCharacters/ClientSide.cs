@@ -901,6 +901,20 @@ public static class ClientSide
 		}
 	}
 
+	[HarmonyPatch(typeof(Menu), nameof(Menu.QuitGame))]
+	private static class ForceSaveOnQuit
+	{
+		private static void Prefix()
+		{
+			if (ZNet.m_onlineBackend == OnlineBackendType.PlayFab)
+			{
+				ZNet.instance.m_haveStoped = false;
+				forceSynchronousSaving = false;
+				Game.instance.SavePlayerProfile(true);
+			}
+		}
+	}
+
 	[HarmonyPatch(typeof(Game), nameof(Game.SavePlayerProfile))]
 	private class ForceSavingPosition
 	{

@@ -17,7 +17,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.4.1";
+	private const string ModVersion = "1.4.2";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -32,7 +32,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.0" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.2" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -44,7 +44,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public static ConfigEntry<int> autoSaveInterval = null!;
 	public static ConfigEntry<int> afkKickTimer = null!;
 	public static ConfigEntry<string> webhookURL = null!;
-	public static ConfigEntry<string> webhookUsernameMaintenance = null!;
+	private static ConfigEntry<string> webhookUsernameMaintenance = null!;
 	private static ConfigEntry<string> maintenanceEnabledText = null!;
 	private static ConfigEntry<string> maintenanceFinishedText = null!;
 	private static ConfigEntry<string> maintenanceAbortedText = null!;
@@ -94,7 +94,8 @@ public class ServerCharacters : BaseUnityPlugin
 		singleCharacterMode = config("2 - Save Files", "Single Character Mode", Toggle.Off, "If set to on, each SteamID / Xbox ID can create one character only on this server. Has no effect for admins.");
 		backupOnlyMode = config("2 - Save Files", "Backup only mode", Toggle.Off, "Enabling this will not enforce the server profile anymore. DO NOT ENABLE THIS IF YOU DON'T KNOW EXACTLY WHAT YOU ARE DOING!");
 		backupsToKeep = config("2 - Save Files", "Number of backups to keep", 25, new ConfigDescription("Sets the number of backups that should be stored for each character.", new AcceptableValueRange<int>(1, 50)));
-		autoSaveInterval = config("2 - Save Files", "Auto save interval", 20, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 30)));
+		autoSaveInterval = config("2 - Save Files", "Auto save interval", 30, new ConfigDescription("Minutes between auto saves of characters and the world.", new AcceptableValueRange<int>(1, 120)));
+		autoSaveInterval.SettingChanged += (_, _) => Game.m_saveInterval = autoSaveInterval.Value * 60;
 		storePoison = config("2 - Save Files", "Store poison debuff", Toggle.On, new ConfigDescription("If on, poison debuffs are stored in the save file on logout and applied on login, to prevent users from logging out if they are poisoned, to clear the debuff."));
 
 		maintenanceMode = config("3 - Maintenance", "Maintenance Mode", Toggle.Off, "If set to on, a timer will start. If the timer elapses, all non-admins will be disconnected, the world will be saved and only admins will be able to connect to the server, until maintenance mode is toggled to off.");

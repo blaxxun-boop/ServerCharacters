@@ -174,28 +174,13 @@ namespace ServerCharacters
 			}
 		}
 
-		[HarmonyPatch(typeof(Game), nameof(Game.UpdateSaving))]
-		private static class PatchGameUpdateSaving
+		[HarmonyPatch(typeof(FejdStartup), nameof(FejdStartup.Awake))]
+		private static class SetAutoSaveInterval
 		{
-			private static readonly MethodInfo getAutoSaveInterval = AccessTools.DeclaredMethod(typeof(PatchGameUpdateSaving), nameof(getAutoSaveIntervalSetting));
-
-			[UsedImplicitly]
-			private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+			private static void Postfix()
 			{
-				foreach (CodeInstruction instruction in instructions)
-				{
-					if (instruction.opcode == OpCodes.Ldc_R4 && instruction.OperandIs(Game.m_saveInterval))
-					{
-						yield return new CodeInstruction(OpCodes.Call, getAutoSaveInterval);
-					}
-					else
-					{
-						yield return instruction;
-					}
-				}
+				Game.m_saveInterval = ServerCharacters.autoSaveInterval.Value * 60;
 			}
-
-			private static float getAutoSaveIntervalSetting() => ServerCharacters.autoSaveInterval.Value * 60;
 		}
 
 		public static bool CharacterNameIsForbidden(string characterName)
