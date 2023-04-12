@@ -549,19 +549,6 @@ public static class ServerSide
 		}
 	}
 
-	[HarmonyPatch(typeof(Version), nameof(Version.GetVersionString))]
-	private static class PatchVersionGetVersionString
-	{
-		[HarmonyPriority(Priority.Last)]
-		private static void Postfix(ref string __result)
-		{
-			if (ZNet.instance?.IsServer() == true && (ZNet.instance.m_hostSocket != null || !ZNet.m_openServer))
-			{
-				__result += "-ServerCharacters";
-			}
-		}
-	}
-
 	[HarmonyPatch(typeof(PlayerProfile), nameof(PlayerProfile.SavePlayerToDisk))]
 	private static class PatchPlayerProfileSave_Server
 	{
