@@ -129,4 +129,13 @@ public static class Utils
 
 		return player;
 	}
+
+	public static void OverwriteDict<K, V>(IDictionary<K, V> src, IDictionary<K, V> dst)
+	{
+		dst.Clear();
+		foreach (KeyValuePair<K, V> kv in src)
+		{
+			dst.Add(kv.Key, kv.Value);
+		}
+	}
 }

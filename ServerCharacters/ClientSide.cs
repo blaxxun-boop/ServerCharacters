@@ -71,7 +71,8 @@ public static class ClientSide
 
 				Skills.SkillType GetSkillType(string name)
 				{
-					Dictionary<Skills.SkillType, Skills.Skill> backup = Player.m_localPlayer.GetSkills().m_skillData.ToDictionary(kv => kv.Key, kv => new Skills.Skill(kv.Value.m_info) { m_accumulator = kv.Value.m_accumulator, m_level = kv.Value.m_level });
+					Dictionary<Skills.SkillType, Skills.Skill> skillData = Player.m_localPlayer.GetSkills().m_skillData;
+					Dictionary<Skills.SkillType, Skills.Skill> backup = skillData.ToDictionary(kv => kv.Key, kv => new Skills.Skill(kv.Value.m_info) { m_accumulator = kv.Value.m_accumulator, m_level = kv.Value.m_level });
 
 					SaveLastSkillReset.last = Skills.SkillType.All;
 					try
@@ -83,8 +84,8 @@ public static class ClientSide
 					{
 						SilenceConsole.silence = false;
 					}
-
-					Player.m_localPlayer.GetSkills().m_skillData = backup;
+					
+					Utils.OverwriteDict(backup, skillData);
 
 					return SaveLastSkillReset.last;
 				}
@@ -277,8 +278,8 @@ public static class ClientSide
 			if (serverCharacter && doEmergencyBackup && playerSnapShotLast != null && Player.m_localPlayer is { } player)
 			{
 				player.m_inventory.m_inventory = playerSnapShotLast.inventory;
-				player.m_knownStations = playerSnapShotLast.knownStations;
-				player.m_knownTexts = playerSnapShotLast.knownTexts;
+				Utils.OverwriteDict(playerSnapShotLast.knownStations, player.m_knownStations);
+				Utils.OverwriteDict(playerSnapShotLast.knownTexts, player.m_knownTexts);
 			}
 		}
 	}
@@ -389,7 +390,7 @@ public static class ClientSide
 	{
 		private static void Prefix(Player __instance)
 		{
-			if (ServerCharacters.storePoison.GetToggle() && !__instance.IsDead() && __instance.m_seman.GetStatusEffect("Poison") is SE_Poison poison)
+			if (ServerCharacters.storePoison.GetToggle() && !__instance.IsDead() && __instance.m_seman.GetStatusEffect("Poison".GetStableHashCode()) is SE_Poison poison)
 			{
 				__instance.m_customData["ServerCharacters PoisonDamage"] = poison.m_damageLeft.ToString(CultureInfo.InvariantCulture);
 				__instance.m_customData["ServerCharacters PoisonDamageHit"] = poison.m_damagePerHit.ToString(CultureInfo.InvariantCulture);
@@ -405,7 +406,7 @@ public static class ClientSide
 		{
 			if (ServerCharacters.storePoison.GetToggle() && __instance.m_customData.TryGetValue("ServerCharacters PoisonDamage", out string poisonString) && poisonString != "")
 			{
-				SE_Poison poison = (SE_Poison)__instance.m_seman.AddStatusEffect("Poison");
+				SE_Poison poison = (SE_Poison)__instance.m_seman.AddStatusEffect("Poison".GetStableHashCode());
 				poison.m_damageLeft = float.Parse(__instance.m_customData["ServerCharacters PoisonDamage"], CultureInfo.InvariantCulture);
 				poison.m_damagePerHit = float.Parse(__instance.m_customData["ServerCharacters PoisonDamageHit"], CultureInfo.InvariantCulture);
 				poison.m_ttl = float.Parse(__instance.m_customData["ServerCharacters PoisonTTL"], CultureInfo.InvariantCulture);
@@ -540,7 +541,7 @@ public static class ClientSide
 				return;
 			}
 
-			PlayerProfile profile = new();
+			PlayerProfile profile = new(Game.instance.m_playerProfile.m_filename);
 			if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.m_playerName))
 			{
 				Game.instance.Logout();
@@ -550,8 +551,6 @@ public static class ClientSide
 			}
 
 			serverCharacter = true;
-
-			profile.m_filename = Game.instance.m_playerProfile.m_filename;
 			Game.instance.m_playerProfile = profile;
 
 			string signatureFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";

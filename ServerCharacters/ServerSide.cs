@@ -89,7 +89,9 @@ public static class ServerSide
 				return null;
 			}
 
-			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetName().ToLower();
+			profile = new PlayerProfile(Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetName().ToLower(), FileHelpers.FileSource.Local);
+			profile.LoadPlayerProfileFromBytes(profileData);
+			
 			if (!File.Exists(profile.GetPath()) && ServerCharacters.postFirstLoginToWebhook.Value == Toggle.On)
 			{
 				Utils.PostToDiscord(ServerCharacters.firstLoginMessage.Value.Replace("{name}", profile.GetName()), ServerCharacters.webhookUsernameOther.Value);
@@ -115,7 +117,7 @@ public static class ServerSide
 				return;
 			}
 
-			PlayerProfile profile = new(fileSource: FileHelpers.FileSource.Local);
+			PlayerProfile profile = new();
 			if (!profile.LoadPlayerProfileFromBytes(profileData) || Shared.CharacterNameIsForbidden(profile.GetName()))
 			{
 				// invalid data ...
@@ -123,7 +125,8 @@ public static class ServerSide
 				return;
 			}
 
-			profile.m_filename = Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetName().ToLower();
+			profile = new PlayerProfile(Utils.GetPlayerID(peerRpc.m_socket.GetHostName()) + "_" + profile.GetName().ToLower(), FileHelpers.FileSource.Local);
+			profile.LoadPlayerProfileFromBytes(profileData);
 
 			string profilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + profile.m_filename + ".fch";
 			FileInfo profileFileInfo = new(profilePath);
@@ -685,7 +688,7 @@ public static class ServerSide
 			{
 				if (instructions[i + 1].opcode == OpCodes.Ldfld)
 				{
-					if (instructions[i + 1].operand is FieldInfo field && field.FieldType.IsClass)
+					if (instructions[i + 1].operand is FieldInfo { FieldType.IsClass: true } field)
 					{
 						if (field.FieldType == typeof(Inventory))
 						{

@@ -17,7 +17,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.4.3";
+	private const string ModVersion = "1.4.4";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -32,7 +32,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.3" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.4" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -106,7 +106,7 @@ public class ServerCharacters : BaseUnityPlugin
 		maintenanceFinishedText = config("3 - Maintenance", "Maintenance finished text", "Maintenance has been disabled and the server is back online. Have fun!", new ConfigDescription("Message to be posted to Discord, when the maintenance mode has been toggled to 'Off'. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
 		maintenanceAbortedText = config("3 - Maintenance", "Maintenance aborted text", "Maintenance has been aborted.", new ConfigDescription("Message to be posted to Discord, when the maintenance has been aborted. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
 		maintenanceStartedText = config("3 - Maintenance", "Maintenance started text", "Maintenance has started and players will be unable to connect.", new ConfigDescription("Message to be posted to Discord, when the maintenance has begun. Leave empty to not post anything.", null, new ConfigurationManagerAttributes()), false);
-		
+
 		firstLoginMessage = config("3 - First Login", "First Login Message", "A new player logged in for the first time: {name}", new ConfigDescription("Message to display if a player logs in for the very first time. Leave empty to not display anything."));
 		newCharacterIntro = config("3 - First Login", "Intro", Intro.ValkyrieAndIntro, new ConfigDescription("Sets the kind of intro new characters will get."));
 		postFirstLoginToWebhook = config("3 - First Login", "First Login Webhook", Toggle.Off, new ConfigDescription("If on, the first login message is posted to the webhook as well.", null, new ConfigurationManagerAttributes()), false);
