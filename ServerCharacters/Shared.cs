@@ -194,4 +194,19 @@ public static class Shared
 	{
 		return characterName.Length < 3 || characterName.Any(c => c != ' ' && c != '\'' && !char.IsLetter(c));
 	}
+
+	[HarmonyPatch(typeof(SaveSystem), nameof(SaveSystem.GetSaveInfo))]
+	private static class FilterServerCharacterFiles
+	{
+		private static bool Prefix(string path, ref bool __result)
+		{
+			if (path.EndsWith(".signature", StringComparison.Ordinal) || path.EndsWith(".serverbackup", StringComparison.Ordinal))
+			{
+				__result = false;
+				return false;
+			}
+
+			return true;
+		}
+	}
 }

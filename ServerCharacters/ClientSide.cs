@@ -84,7 +84,7 @@ public static class ClientSide
 					{
 						SilenceConsole.silence = false;
 					}
-					
+
 					Utils.OverwriteDict(backup, skillData);
 
 					return SaveLastSkillReset.last;
@@ -352,8 +352,8 @@ public static class ClientSide
 
 		private static MethodInfo TargetMethod() => Type.GetType(nameof(ZSteamSocket) + ", assembly_valheim") is { } steamSocket ? AccessTools.DeclaredMethod(steamSocket, nameof(ZSteamSocket.Close)) : AccessTools.DeclaredMethod(typeof(EnableSocketLinger), nameof(dummy));
 
-		private static MethodInfo socketClose => AccessTools.Method(typeof(SteamNetworkingSockets), nameof(SteamNetworkingSockets.CloseConnection)); 
-		
+		private static MethodInfo socketClose => AccessTools.Method(typeof(SteamNetworkingSockets), nameof(SteamNetworkingSockets.CloseConnection));
+
 		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codeInstructions)
 		{
 			foreach (CodeInstruction instruction in codeInstructions)
@@ -928,7 +928,7 @@ public static class ClientSide
 				// Ensure PlayFab connections do *not* push the sending of player save onto the background compressing queue, but directly send it
 				ZNet.instance.m_haveStoped = true;
 			}
-			
+
 			if (ZNet.m_world == null || __instance.m_playerProfile.HaveLogoutPoint())
 			{
 				originalValue = true;
