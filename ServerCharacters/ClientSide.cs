@@ -390,11 +390,20 @@ public static class ClientSide
 	{
 		private static void Prefix(Player __instance)
 		{
-			if (ServerCharacters.storePoison.GetToggle() && !__instance.IsDead() && __instance.m_seman.GetStatusEffect("Poison".GetStableHashCode()) is SE_Poison poison)
+			if (ServerCharacters.storePoison.GetToggle())
 			{
-				__instance.m_customData["ServerCharacters PoisonDamage"] = poison.m_damageLeft.ToString(CultureInfo.InvariantCulture);
-				__instance.m_customData["ServerCharacters PoisonDamageHit"] = poison.m_damagePerHit.ToString(CultureInfo.InvariantCulture);
-				__instance.m_customData["ServerCharacters PoisonTTL"] = poison.m_ttl.ToString(CultureInfo.InvariantCulture);
+				if (__instance.m_seman.GetStatusEffect("Poison".GetStableHashCode()) is SE_Poison poison && !__instance.IsDead())
+				{
+					__instance.m_customData["ServerCharacters PoisonDamage"] = poison.m_damageLeft.ToString(CultureInfo.InvariantCulture);
+					__instance.m_customData["ServerCharacters PoisonDamageHit"] = poison.m_damagePerHit.ToString(CultureInfo.InvariantCulture);
+					__instance.m_customData["ServerCharacters PoisonTTL"] = poison.m_ttl.ToString(CultureInfo.InvariantCulture);
+				}
+				else
+				{
+					__instance.m_customData.Remove("ServerCharacters PoisonDamage");
+					__instance.m_customData.Remove("ServerCharacters PoisonDamageHit");
+					__instance.m_customData.Remove("ServerCharacters PoisonTTL");
+				}
 			}
 		}
 	}
@@ -410,10 +419,6 @@ public static class ClientSide
 				poison.m_damageLeft = float.Parse(__instance.m_customData["ServerCharacters PoisonDamage"], CultureInfo.InvariantCulture);
 				poison.m_damagePerHit = float.Parse(__instance.m_customData["ServerCharacters PoisonDamageHit"], CultureInfo.InvariantCulture);
 				poison.m_ttl = float.Parse(__instance.m_customData["ServerCharacters PoisonTTL"], CultureInfo.InvariantCulture);
-
-				__instance.m_customData.Remove("ServerCharacters PoisonDamage");
-				__instance.m_customData.Remove("ServerCharacters PoisonDamageHit");
-				__instance.m_customData.Remove("ServerCharacters PoisonTTL");
 			}
 		}
 	}
