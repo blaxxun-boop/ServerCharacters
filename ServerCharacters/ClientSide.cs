@@ -768,7 +768,7 @@ public static class ClientSide
 						new CodeInstruction(OpCodes.Nop) { labels = new List<Label>(callStartLabels) },
 						instructions[i - 1], // location save target
 						new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(ReplaceSpawnPoint), nameof(CheckCustomSpawnPoint))),
-						new CodeInstruction(OpCodes.Brtrue, label)
+						new CodeInstruction(OpCodes.Brtrue, label),
 					});
 
 					callStartLabels.Clear();
@@ -1020,7 +1020,7 @@ public static class ClientSide
 			{
 				inventory = Player.m_localPlayer.GetInventory().m_inventory.Select(d => d.Clone()).ToList(),
 				knownStations = Player.m_localPlayer.m_knownStations.ToDictionary(t => t.Key, t => t.Value),
-				knownTexts = Player.m_localPlayer.m_knownTexts.ToDictionary(t => t.Key, t => t.Value)
+				knownTexts = Player.m_localPlayer.m_knownTexts.ToDictionary(t => t.Key, t => t.Value),
 			};
 		}
 	}
@@ -1028,14 +1028,21 @@ public static class ClientSide
 	[HarmonyPatch(typeof(Inventory), nameof(Inventory.Changed))]
 	private class PatchInventoryChanged
 	{
+		public static bool queuedThisFrame = false;
+
 		private static void Prefix(Inventory __instance)
 		{
-			if (__instance == Player.m_localPlayer?.m_inventory && ZNet.instance.GetServerPeer() is { } serverPeer)
+			if (!queuedThisFrame && __instance == Player.m_localPlayer?.m_inventory && ZNet.instance.GetServerPeer() is { } serverPeer)
 			{
-				ZPackage inventoryPackage = new();
-				__instance.Save(inventoryPackage);
+				queuedThisFrame = true;
 				IEnumerator saveAsync()
 				{
+					yield return null;
+					queuedThisFrame = false;
+
+					ZPackage inventoryPackage = new();
+					__instance.Save(inventoryPackage);
+
 					foreach (bool sending in Shared.sendCompressedDataToPeer(serverPeer, "ServerCharacters PlayerInventory", inventoryPackage.GetArray()))
 					{
 						if (!sending)
@@ -1092,6 +1099,7 @@ public static class ClientSide
 
 		private static void Postfix(Player __instance)
 		{
+			PatchInventoryChanged.queuedThisFrame = false;
 			__instance.StartCoroutine(MeasureActivity());
 		}
 	}

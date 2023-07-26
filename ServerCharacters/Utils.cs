@@ -102,14 +102,14 @@ public static class Utils
 					Kills = profile.m_playerStats.m_kills,
 					Deaths = profile.m_playerStats.m_deaths,
 					Crafts = profile.m_playerStats.m_crafts,
-					Builds = profile.m_playerStats.m_builds
+					Builds = profile.m_playerStats.m_builds,
 				};
 				Vector3 position = loggedIn ? ZNet.instance.GetPeerByHostName(playerInfo.m_host).m_refPos : profile.GetLogoutPoint();
 				player.position = new WebinterfacePlayer.Position
 				{
 					X = position.x,
 					Y = position.y,
-					Z = position.z
+					Z = position.z,
 				};
 
 				playerList.playerLists.Add(player);

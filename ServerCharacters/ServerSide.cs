@@ -642,7 +642,7 @@ public static class ServerSide
 		{
 			m_skills = ((Player)Resources.FindObjectsOfTypeAll(typeof(Player))[0]).GetComponent<Skills>().m_skills,
 			// ReSharper disable once Unity.IncorrectMonoBehaviourInstantiation
-			m_player = new DummyPlayer()
+			m_player = new DummyPlayer(),
 		};
 		ZPackage playerPackage = new(profile.m_playerData);
 		ConsumePlayerSaveUntilSkills(playerPackage);
@@ -694,7 +694,7 @@ public static class ServerSide
 						{
 							yield return new CodeInstruction(OpCodes.Ldnull)
 							{
-								labels = instructions[i++].labels
+								labels = instructions[i++].labels,
 							};
 							yield return new CodeInstruction(OpCodes.Ldnull);
 							yield return new CodeInstruction(OpCodes.Ldc_I4_0);
@@ -705,7 +705,7 @@ public static class ServerSide
 						{
 							yield return new CodeInstruction(OpCodes.Ldtoken, field.FieldType)
 							{
-								labels = instructions[i++].labels
+								labels = instructions[i++].labels,
 							};
 							yield return new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(Type), nameof(Type.GetTypeFromHandle)));
 							yield return new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(AccessTools), nameof(AccessTools.CreateInstance), new[] { typeof(Type) }));
@@ -715,7 +715,7 @@ public static class ServerSide
 					{
 						yield return new CodeInstruction(OpCodes.Ldc_I4_0)
 						{
-							labels = instructions[i++].labels
+							labels = instructions[i++].labels,
 						};
 					}
 

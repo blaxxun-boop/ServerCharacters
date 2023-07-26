@@ -29,7 +29,7 @@ public static class WebInterfaceAPI
 			patchersPath = Paths.PatcherPluginPath,
 			savePath = global::Utils.GetSaveDataPath(FileHelpers.FileSource.Local),
 			processId = Process.GetCurrentProcess().Id,
-			serverName = ZNet.m_ServerName
+			serverName = ZNet.m_ServerName,
 		};
 
 		new Thread(Server).Start();
@@ -85,7 +85,7 @@ public static class WebInterfaceAPI
 		SendMessage(client, "MaintenanceMessage", new Maintenance
 		{
 			maintenanceActive = ServerCharacters.maintenanceMode.GetToggle() && ServerCharacters.selfReference.tickCount > int.MaxValue / 2,
-			startTime = ServerCharacters.maintenanceMode.GetToggle() ? DateTimeOffset.Now.ToUnixTimeSeconds() + ServerCharacters.selfReference.tickCount : 0
+			startTime = ServerCharacters.maintenanceMode.GetToggle() ? DateTimeOffset.Now.ToUnixTimeSeconds() + ServerCharacters.selfReference.tickCount : 0,
 		});
 		SendMessage(client, "Ready", null);
 
@@ -207,7 +207,7 @@ public static class WebInterfaceAPI
 				Version = plugin.Metadata.Version.ToString(),
 				lastUpdate = ((DateTimeOffset)File.GetLastWriteTime(plugin.Location)).ToUnixTimeSeconds(),
 				modPath = plugin.Location.Replace(Paths.PluginPath + Path.DirectorySeparatorChar, ""),
-				configPath = plugin.Instance ? plugin.Instance.Config.ConfigFilePath.Replace(Paths.ConfigPath + Path.DirectorySeparatorChar, "") : ""
+				configPath = plugin.Instance ? plugin.Instance.Config.ConfigFilePath.Replace(Paths.ConfigPath + Path.DirectorySeparatorChar, "") : "",
 			}));
 			return modList;
 		}
