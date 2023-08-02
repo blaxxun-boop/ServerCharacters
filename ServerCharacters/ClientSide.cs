@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using System.Threading;
@@ -413,7 +414,7 @@ public static class ClientSide
 	{
 		private static void Postfix(Player __instance)
 		{
-			if (ServerCharacters.storePoison.GetToggle() && __instance.m_customData.TryGetValue("ServerCharacters PoisonDamage", out string poisonString) && poisonString != "")
+			if (__instance.m_nview.m_zdo is not null && ServerCharacters.storePoison.GetToggle() && __instance.m_customData.TryGetValue("ServerCharacters PoisonDamage", out string poisonString) && poisonString != "")
 			{
 				SE_Poison poison = (SE_Poison)__instance.m_seman.AddStatusEffect("Poison".GetStableHashCode());
 				poison.m_damageLeft = float.Parse(__instance.m_customData["ServerCharacters PoisonDamage"], CultureInfo.InvariantCulture);
@@ -1084,7 +1085,7 @@ public static class ClientSide
 					lastPos = Player.m_localPlayer.transform.position;
 					counter = 0;
 				}
-				else if (++counter >= ServerCharacters.afkKickTimer.Value && ServerCharacters.afkKickTimer.Value > 0 && !ZNet.m_isServer)
+				else if (++counter >= ServerCharacters.afkKickTimer.Value && ServerCharacters.afkKickTimer.Value > 0 && !ZNet.m_isServer && (!ServerCharacters.configSync.IsAdmin || ServerCharacters.excludeAdminsFromAfkCheck.Value == Toggle.Off))
 				{
 					Game.instance.Logout();
 					ZNet.m_connectionStatus = ZNet.ConnectionStatus.ErrorDisconnected;

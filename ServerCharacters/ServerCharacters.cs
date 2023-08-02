@@ -17,7 +17,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.4.7";
+	private const string ModVersion = "1.4.8";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -32,7 +32,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.6" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.8" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -43,6 +43,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public static ConfigEntry<int> backupsToKeep = null!;
 	public static ConfigEntry<int> autoSaveInterval = null!;
 	public static ConfigEntry<int> afkKickTimer = null!;
+	public static ConfigEntry<Toggle> excludeAdminsFromAfkCheck = null!;
 	public static ConfigEntry<string> webhookURL = null!;
 	private static ConfigEntry<string> webhookUsernameMaintenance = null!;
 	private static ConfigEntry<string> maintenanceEnabledText = null!;
@@ -86,6 +87,7 @@ public class ServerCharacters : BaseUnityPlugin
 		serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.On, "If on, the configuration is locked and can be changed by server admins only.");
 		configSync.AddLockingConfigEntry(serverConfigLocked);
 		afkKickTimer = config("1 - General", "AFK Kick Timer", 0, new ConfigDescription("Automatically kicks players, if they haven't moved at all in the configured time. In minutes. 0 is disabled.", new AcceptableValueRange<int>(0, 30)));
+		excludeAdminsFromAfkCheck = config("1 - General", "Exclude Admins from AFK check", Toggle.Off, new ConfigDescription("Can be used to exclude admins from the AFK kick timer."));
 		webhookURL = config("1 - General", "Discord Webhook URL", "", new ConfigDescription("Discord API endpoint to announce maintenance.", null, new ConfigurationManagerAttributes()), false);
 		loginMessage = config("1 - General", "Login Message", "I have arrived!", new ConfigDescription("Message to shout on login. Leave empty to not shout anything."));
 		webhookUsernameOther = config("1 - General", "Discord Username Other", "Server Characters", new ConfigDescription("Username to be used for non-maintenance related posts to Discord.", null, new ConfigurationManagerAttributes()), false);
