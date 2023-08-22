@@ -236,7 +236,7 @@ public static class WebInterfaceAPI
 
 		public static void SaveWorld()
 		{
-			ExecuteOnMain(() => ZNet.instance.ConsoleSave());
+			ExecuteOnMain(() => ZNet.instance.SaveWorldAndPlayerProfiles());
 		}
 
 		public static void RaiseSkill(RaiseSkill data) => ExecuteOnMain(() =>

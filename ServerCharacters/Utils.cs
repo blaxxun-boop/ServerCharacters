@@ -99,10 +99,10 @@ public static class Utils
 				player.statistics = new WebinterfacePlayer.Statistics
 				{
 					lastTouch = loggedIn ? 0 : ((DateTimeOffset)file.LastWriteTimeUtc).ToUnixTimeSeconds(),
-					Kills = profile.m_playerStats.m_kills,
-					Deaths = profile.m_playerStats.m_deaths,
-					Crafts = profile.m_playerStats.m_crafts,
-					Builds = profile.m_playerStats.m_builds,
+					Kills = (int)profile.m_playerStats[PlayerStatType.EnemyKills],
+					Deaths = (int)profile.m_playerStats[PlayerStatType.Deaths],
+					Crafts = (int)profile.m_playerStats[PlayerStatType.Crafts],
+					Builds = (int)profile.m_playerStats[PlayerStatType.Builds],
 				};
 				Vector3 position = loggedIn ? ZNet.instance.GetPeerByHostName(playerInfo.m_host).m_refPos : profile.GetLogoutPoint();
 				player.position = new WebinterfacePlayer.Position

@@ -17,7 +17,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.4.8";
+	private const string ModVersion = "1.4.9";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -278,7 +278,7 @@ public class ServerCharacters : BaseUnityPlugin
 					}
 				}
 
-				ZNet.instance.ConsoleSave();
+				ZNet.instance.SaveWorldAndPlayerProfiles();
 				Utils.Log("Maintenance started. World has been saved.");
 				Utils.PostToDiscord(maintenanceStartedText.Value, webhookUsernameMaintenance.Value);
 				WebInterfaceAPI.SendMaintenanceMessage(new Maintenance { startTime = DateTimeOffset.Now.ToUnixTimeSeconds(), maintenanceActive = true });
