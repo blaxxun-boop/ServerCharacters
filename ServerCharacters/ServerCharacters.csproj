@@ -119,6 +119,9 @@
         </Reference>
         <Reference Include="System.Security"/>
         <Reference Include="System.Xml"/>
+        <Reference Include="Unity.TextMeshPro">
+            <HintPath>$(GamePath)\valheim_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+        </Reference>
         <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
             <HintPath>$(GamePath)\unstripped_corlib\UnityEngine.dll</HintPath>
         </Reference>
