@@ -587,7 +587,7 @@ public static class ServerSide
 		}
 
 		string[] parts = profile.m_filename.Split('_');
-		Utils.Cache.profiles[new Utils.ProfileName { id = parts.Length > 1 ? $"{parts[0]}_{parts[1]}" : parts[0], name = profile.GetName() }] = profile;
+		Utils.Cache.profiles[new Utils.ProfileName { id = parts.Length > 1 ? $"{parts[0]}_{parts[1]}" : parts[0], name = profile.GetName().ToLower() }] = profile;
 	}
 
 	public static void generateServerKey()

@@ -17,7 +17,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.4.10";
+	private const string ModVersion = "1.4.12";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -32,7 +32,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.10" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.12" };
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -119,7 +119,7 @@ public class ServerCharacters : BaseUnityPlugin
 		Assembly assembly = Assembly.GetExecutingAssembly();
 		harmony.PatchAll(assembly);
 
-		FileSystemWatcher maintenanceFileWatcher = new(pluginDir, "maintenance");
+		FileSystemWatcher maintenanceFileWatcher = new(Paths.ConfigPath, "maintenance");
 		maintenanceFileWatcher.Created += maintenanceFileEvent;
 		maintenanceFileWatcher.Deleted += maintenanceFileEvent;
 		maintenanceFileWatcher.IncludeSubdirectories = true;
@@ -193,7 +193,7 @@ public class ServerCharacters : BaseUnityPlugin
 
 	private static void maintenanceFileEvent(object s, EventArgs e)
 	{
-		Toggle maintenance = File.Exists(pluginDir + Path.DirectorySeparatorChar + "maintenance") ? Toggle.On : Toggle.Off;
+		Toggle maintenance = File.Exists(Paths.ConfigPath + Path.DirectorySeparatorChar + "maintenance") ? Toggle.On : Toggle.Off;
 		SyncedConfigEntry<Toggle> cfg = ConfigSync.ConfigData(maintenanceMode)!;
 		if (cfg.LocalBaseValue == null)
 		{
@@ -227,7 +227,7 @@ public class ServerCharacters : BaseUnityPlugin
 
 			if (configSync.IsSourceOfTruth)
 			{
-				File.Create(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
+				File.Create(Paths.ConfigPath + Path.DirectorySeparatorChar + "maintenance");
 				Utils.PostToDiscord(text, webhookUsernameMaintenance.Value);
 			}
 		}
@@ -235,7 +235,7 @@ public class ServerCharacters : BaseUnityPlugin
 		{
 			if (configSync.IsSourceOfTruth)
 			{
-				File.Delete(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)! + Path.DirectorySeparatorChar + "maintenance");
+				File.Delete(Paths.ConfigPath + Path.DirectorySeparatorChar + "maintenance");
 				Utils.PostToDiscord(tickCount <= maintenanceTimer.Value ? maintenanceAbortedText.Value : maintenanceFinishedText.Value, webhookUsernameMaintenance.Value);
 				WebInterfaceAPI.SendMaintenanceMessage(new Maintenance { startTime = 0, maintenanceActive = false });
 			}
@@ -290,5 +290,10 @@ public class ServerCharacters : BaseUnityPlugin
 		fixedUpdateCount -= timerInterval;
 		--tickCount;
 		++monotonicCounter;
+		
+		if (ClientSide.maintenanceCountdown)
+		{
+			ClientSide.maintenanceCountdown.text = maintenanceMode.GetToggle() ? tickCount < int.MaxValue / 2 ? "Maintenance in: " + TimeSpan.FromSeconds(tickCount).ToString("c") : "Maintenance active" : "";
+		}
 	}
 }

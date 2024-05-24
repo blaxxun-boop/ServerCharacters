@@ -10,10 +10,8 @@ message WebinterfacePlayer {
 
   message Statistics {
     int64 lastTouch = 1;
-    int32 kills = 2;
-    int32 deaths = 3;
-    int32 crafts = 4;
-    int32 builds = 5;
+    reserved 2 to 5;
+    map<string, float> stats = 6;
   }
 
   Statistics statistics = 3;

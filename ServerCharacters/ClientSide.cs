@@ -13,8 +13,10 @@ using System.Threading.Tasks;
 using HarmonyLib;
 using JetBrains.Annotations;
 using Steamworks;
+using TMPro;
 using UnityEngine;
 using YamlDotNet.Serialization;
+using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
 namespace ServerCharacters;
@@ -27,7 +29,8 @@ public static class ClientSide
 	private static bool acquireCharacterFromTemplate = false;
 	private static bool doEmergencyBackup = false;
 	private static bool iDied = false;
-
+	public static TextMeshProUGUI maintenanceCountdown = null!;
+	
 	private static PlayerSnapshot? playerSnapShotLast;
 	private static PlayerSnapshot? playerSnapShotNew;
 
@@ -1104,4 +1107,20 @@ public static class ClientSide
 		}
 	}
 
+	[HarmonyPatch(typeof(Minimap), nameof(Minimap.Awake))]
+	private static class DisplayMaintenanceCountdown
+	{
+		private static void Postfix(Minimap __instance)
+		{
+			maintenanceCountdown = Object.Instantiate(__instance.m_smallRoot.transform.Find("small_biome"), __instance.m_smallRoot.transform).GetComponent<TextMeshProUGUI>();
+			maintenanceCountdown.name = "ServerCharacters Maintenance Timer";
+			maintenanceCountdown.text = "";
+			maintenanceCountdown.alignment = TextAlignmentOptions.Left;
+			RectTransform rect = maintenanceCountdown.GetComponent<RectTransform>();
+			rect.anchorMin = new Vector2(0, 1);
+			rect.anchorMax = new Vector2(1, 1);
+			rect.pivot = new Vector2(0, 0.5f);
+			rect.anchoredPosition = new Vector2(5, -rect.anchoredPosition.y);
+		}
+	}
 }
