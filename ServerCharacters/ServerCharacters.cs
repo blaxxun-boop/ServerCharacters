@@ -17,7 +17,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.4.12";
+	private const string ModVersion = "1.4.13";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -290,7 +290,7 @@ public class ServerCharacters : BaseUnityPlugin
 		fixedUpdateCount -= timerInterval;
 		--tickCount;
 		++monotonicCounter;
-		
+
 		if (ClientSide.maintenanceCountdown)
 		{
 			ClientSide.maintenanceCountdown.text = maintenanceMode.GetToggle() ? tickCount < int.MaxValue / 2 ? "Maintenance in: " + TimeSpan.FromSeconds(tickCount).ToString("c") : "Maintenance active" : "";

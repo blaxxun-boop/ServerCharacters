@@ -30,7 +30,7 @@ public static class ClientSide
 	private static bool doEmergencyBackup = false;
 	private static bool iDied = false;
 	public static TextMeshProUGUI maintenanceCountdown = null!;
-	
+
 	private static PlayerSnapshot? playerSnapShotLast;
 	private static PlayerSnapshot? playerSnapShotNew;
 
@@ -684,30 +684,24 @@ public static class ClientSide
 		}
 	}
 
-	[HarmonyPatch(typeof(Player), nameof(Player.Awake))]
+	[HarmonyPatch(typeof(Player), nameof(Player.OnSpawned))]
 	private static class DisableValkyrieAndIntro
 	{
-		private static void Postfix(Player __instance)
+		private static void Postfix(bool spawnValkyrie)
 		{
-			if (ServerCharacters.newCharacterIntro.Value == Intro.Disabled)
+			if (spawnValkyrie)
 			{
-				__instance.m_valkyrie = null;
+				switch (ServerCharacters.newCharacterIntro.Value)
+				{
+					case Intro.Disabled:
+						Game.instance.SkipIntro();
+						break;
+					case Intro.Valkyrie:
+						Game.instance.m_inIntro = Game.instance.m_queuedIntro = false;
+						TextViewer.instance.HideIntro();
+						break;
+				}
 			}
-		}
-	}
-
-	[HarmonyPatch(typeof(Valkyrie), nameof(Valkyrie.ShowText))]
-	private static class DisableIntro
-	{
-		private static bool Prefix(Valkyrie __instance)
-		{
-			if (ServerCharacters.newCharacterIntro.Value == Intro.Valkyrie)
-			{
-				__instance.m_startPause = 0;
-				return false;
-			}
-
-			return true;
 		}
 	}
 
