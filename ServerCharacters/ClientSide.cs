@@ -106,7 +106,7 @@ public static class ClientSide
 					{
 						string name = args[3];
 						int lastArg = 4;
-						if (name.StartsWith("\""))
+						if (name.StartsWith("\"", StringComparison.Ordinal))
 						{
 							name = name.Substring(1);
 							while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
@@ -141,7 +141,7 @@ public static class ClientSide
 					{
 						string name = args[4];
 						int lastArg = 5;
-						if (name.StartsWith("\""))
+						if (name.StartsWith("\"", StringComparison.Ordinal))
 						{
 							name = name.Substring(1);
 							while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
@@ -176,7 +176,7 @@ public static class ClientSide
 					{
 						string name = args[4];
 						int lastArg = 5;
-						if (name.StartsWith("\""))
+						if (name.StartsWith("\"", StringComparison.Ordinal))
 						{
 							name = name.Substring(1);
 							while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
@@ -201,7 +201,7 @@ public static class ClientSide
 				{
 					string name = args[2];
 					int lastArg = 3;
-					if (name.StartsWith("\""))
+					if (name.StartsWith("\"", StringComparison.Ordinal))
 					{
 						name = name.Substring(1);
 						while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
@@ -237,7 +237,7 @@ public static class ClientSide
 				{
 					string name = args[2];
 					int lastArg = 3;
-					if (name.StartsWith("\""))
+					if (name.StartsWith("\"", StringComparison.Ordinal))
 					{
 						name = name.Substring(1);
 						while (lastArg < args.Length && !name.EndsWith("\"", StringComparison.Ordinal))
@@ -1065,23 +1065,35 @@ public static class ClientSide
 			}
 		}
 	}
+	
+	[HarmonyPatch]
+	private static class MonitorPlayerActivityCheck
+	{
+		private static IEnumerable<MethodInfo> TargetMethods() => new[]
+		{
+			AccessTools.DeclaredMethod(typeof(ZInput), nameof(ZInput.GetButton)),
+			AccessTools.DeclaredMethod(typeof(ZInput), nameof(ZInput.GetButtonDown)),
+		};
+		
+		private static void Postfix(ref bool __result)
+		{
+			if (__result)
+			{
+				MonitorPlayerActivity.counter = 0;
+			}
+		}
+	}
 
 	[HarmonyPatch(typeof(Player), nameof(Player.SetLocalPlayer))]
 	private static class MonitorPlayerActivity
 	{
-		private static Vector3 lastPos = Vector3.zero;
-		private static int counter = 0;
+		public static int counter = 0;
 
 		private static IEnumerator MeasureActivity()
 		{
 			for (;;)
 			{
-				if (Player.m_localPlayer && lastPos != Player.m_localPlayer.transform.position)
-				{
-					lastPos = Player.m_localPlayer.transform.position;
-					counter = 0;
-				}
-				else if (++counter >= ServerCharacters.afkKickTimer.Value && ServerCharacters.afkKickTimer.Value > 0 && !ZNet.m_isServer && (!ServerCharacters.configSync.IsAdmin || ServerCharacters.excludeAdminsFromAfkCheck.Value == Toggle.Off))
+				if (++counter >= ServerCharacters.afkKickTimer.Value && ServerCharacters.afkKickTimer.Value > 0 && !ZNet.m_isServer && (!ServerCharacters.configSync.IsAdmin || ServerCharacters.excludeAdminsFromAfkCheck.Value == Toggle.Off))
 				{
 					Game.instance.Logout();
 					ZNet.m_connectionStatus = ZNet.ConnectionStatus.ErrorDisconnected;
