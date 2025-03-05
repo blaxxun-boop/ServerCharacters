@@ -54,12 +54,12 @@ public static class Utils
 
 	public static bool IsServerCharactersFilePattern(string file) => file.Split('_').Length >= 3 && file.EndsWith(".fch", StringComparison.Ordinal) && !file.Contains("_backup_");
 
-	public struct ProfileName
+	public record struct ProfileName
 	{
 		[UsedImplicitly] public string id;
 		[UsedImplicitly] public string name;
 
-		public static ProfileName fromPeer(ZNetPeer peer) => new() { id = Utils.GetPlayerID(peer.m_socket.GetHostName()), name = peer.m_playerName };
+		public static ProfileName fromPeer(ZNetPeer peer) => new() { id = GetPlayerID(peer.m_socket.GetHostName()), name = peer.m_playerName };
 	}
 
 	public static class Cache
@@ -82,7 +82,7 @@ public static class Utils
 	public static PlayerList GetPlayerListFromFiles()
 	{
 		PlayerList playerList = new();
-		Dictionary<ProfileName, ZNet.PlayerInfo> playerInfos = ZNet.m_instance.m_players.ToDictionary(p => new ProfileName { id = GetPlayerID(p.m_host), name = p.m_name.ToLower() }, p => p);
+		Dictionary<ProfileName, ZNet.PlayerInfo> playerInfos = ZNet.m_instance.m_players.ToDictionary(p => new ProfileName { id = GetPlayerID(p.m_userInfo.m_id.ToString()), name = p.m_name.ToLower() }, p => p);
 		foreach (string s in Directory.GetFiles(CharacterSavePath))
 		{
 			FileInfo file = new(s);
@@ -104,7 +104,7 @@ public static class Utils
 				{
 					player.statistics.Stats[kv.Key.ToString()] = kv.Value;
 				}
-				Vector3 position = loggedIn ? ZNet.instance.GetPeerByHostName(playerInfo.m_host).m_refPos : profile.GetLogoutPoint();
+				Vector3 position = loggedIn ? ZNet.instance.GetPeerByHostName(playerInfo.m_userInfo.m_id.ToString()).m_refPos : profile.GetLogoutPoint();
 				player.position = new WebinterfacePlayer.Position
 				{
 					X = position.x,

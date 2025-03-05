@@ -10,6 +10,7 @@ using JetBrains.Annotations;
 using UnityEngine;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using Splatform;
 
 namespace ServerCharacters;
 
@@ -56,6 +57,11 @@ public static class ServerSide
 				package.Write(key);
 				package.Write(time);
 				peer.m_rpc.Invoke("ServerCharacters KeyExchange", package);
+
+				if (ZNet.m_onlineBackend != OnlineBackendType.Steamworks)
+				{
+					ServerCharacters.logger.LogFatal("This server is not running on Steam, which is required for this mod to function. Please disable PlayFab (Crossplay) and restart the server.");
+				}
 			}
 		}
 
@@ -629,7 +635,7 @@ public static class ServerSide
 		profile.m_playerData = newData;
 	}
 
-	class DummyPlayer : Player
+	private class DummyPlayer : Player
 	{
 		public override void Message(MessageHud.MessageType type, string msg, int amount = 0, Sprite? icon = null)
 		{

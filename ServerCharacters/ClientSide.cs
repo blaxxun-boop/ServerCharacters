@@ -561,15 +561,20 @@ public static class ClientSide
 			serverCharacter = true;
 			Game.instance.m_playerProfile = profile;
 
-			string signatureFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
-			string backupFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
+			cleanEmergencyBackup();
+		}
+	}
 
-			if (File.Exists(backupFilePath) && File.Exists(signatureFilePath))
-			{
-				File.Delete(signatureFilePath);
-				File.Delete(backupFilePath);
-				Utils.Log($"Deleted emergency backup from {backupFilePath}");
-			}
+	private static void cleanEmergencyBackup()
+	{
+		string signatureFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.signature";
+		string backupFilePath = Utils.CharacterSavePath + Path.DirectorySeparatorChar + Game.instance.m_playerProfile.m_filename + ".fch.serverbackup";
+
+		if (File.Exists(backupFilePath) && File.Exists(signatureFilePath))
+		{
+			File.Delete(signatureFilePath);
+			File.Delete(backupFilePath);
+			Utils.Log($"Deleted emergency backup from {backupFilePath}");
 		}
 	}
 
@@ -592,6 +597,11 @@ public static class ClientSide
 		[UsedImplicitly]
 		private static void Postfix()
 		{
+			if (ServerCharacters.backupOnlyMode.GetToggle())
+			{
+				cleanEmergencyBackup();
+			}
+
 			if (ServerCharacters.backupOnlyMode.GetToggle() ? Game.instance.GetPlayerProfile().HaveLogoutPoint() || Game.instance.GetPlayerProfile().HaveCustomSpawnPoint() : !acquireCharacterFromTemplate)
 			{
 				return;
@@ -628,7 +638,7 @@ public static class ClientSide
 					if (template.spawn is { Count: > 0 } spawnPos)
 					{
 						Random.State oldState = Random.state;
-						Random.InitState(UserInfo.GetLocalUser().NetworkUserId.GetStableHashCode());
+						Random.InitState(UserInfo.GetLocalUser().UserId.GetHashCode());
 						int index = Random.Range(0, spawnPos.Count - 1);
 						Random.state = oldState;
 						Player.m_localPlayer.transform.position = new Vector3(spawnPos[index].x, spawnPos[index].y, spawnPos[index].z);
@@ -672,7 +682,7 @@ public static class ClientSide
 				if (template.spawn is { Count: > 0 } spawnPos)
 				{
 					Random.State oldState = Random.state;
-					Random.InitState(UserInfo.GetLocalUser().NetworkUserId.GetStableHashCode());
+					Random.InitState(UserInfo.GetLocalUser().UserId.GetHashCode());
 					int index = Random.Range(0, spawnPos.Count - 1);
 					Random.state = oldState;
 					Player.m_localPlayer.transform.position = new Vector3(spawnPos[index].x, spawnPos[index].y, spawnPos[index].z);
@@ -722,7 +732,7 @@ public static class ClientSide
 				if (template.spawn is { Count: > 0 } spawnPos)
 				{
 					Random.State oldState = Random.state;
-					Random.InitState(UserInfo.GetLocalUser().NetworkUserId.GetStableHashCode());
+					Random.InitState(UserInfo.GetLocalUser().UserId.GetHashCode());
 					int index = Random.Range(0, spawnPos.Count - 1);
 					Random.state = oldState;
 					pos = new Vector3(spawnPos[index].x, spawnPos[index].y, spawnPos[index].z);
@@ -1065,7 +1075,7 @@ public static class ClientSide
 			}
 		}
 	}
-	
+
 	[HarmonyPatch]
 	private static class MonitorPlayerActivityCheck
 	{
@@ -1074,7 +1084,7 @@ public static class ClientSide
 			AccessTools.DeclaredMethod(typeof(ZInput), nameof(ZInput.GetButton)),
 			AccessTools.DeclaredMethod(typeof(ZInput), nameof(ZInput.GetButtonDown)),
 		};
-		
+
 		private static void Postfix(ref bool __result)
 		{
 			if (__result)
