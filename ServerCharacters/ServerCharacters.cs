@@ -33,6 +33,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
 	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.16" };
+	private static bool initialized;
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -142,7 +143,11 @@ public class ServerCharacters : BaseUnityPlugin
 
 	public static void Initialize()
 	{
-		harmony.Unpatch(AccessTools.DeclaredMethod(typeof(FejdStartup), nameof(Awake)), HarmonyPatchType.Postfix, harmony.Id);
+		if (initialized)
+		{
+			return;
+		}
+		initialized = true;
 
 		if (!serverListenAddress.Value.IsNullOrWhiteSpace())
 		{
