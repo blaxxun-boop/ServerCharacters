@@ -17,7 +17,7 @@ namespace ServerCharacters;
 public class ServerCharacters : BaseUnityPlugin
 {
 	private const string ModName = "Server Characters";
-	private const string ModVersion = "1.4.16";
+	private const string ModVersion = "1.4.17";
 	private const string ModGUID = "org.bepinex.plugins.servercharacters";
 
 	public static ServerCharacters selfReference = null!;
@@ -32,7 +32,7 @@ public class ServerCharacters : BaseUnityPlugin
 	public const int CharacterNameDisconnectMagic = 498209834;
 	public const int SingleCharacterModeDisconnectMagic = 845979243;
 
-	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.16" };
+	public static readonly ConfigSync configSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = "1.4.17", ModRequired = true};
 
 	private static ConfigEntry<Toggle> serverConfigLocked = null!;
 	public static ConfigEntry<Toggle> singleCharacterMode = null!;
@@ -151,7 +151,7 @@ public class ServerCharacters : BaseUnityPlugin
 
 		Directory.CreateDirectory(Utils.CharacterSavePath);
 
-		string legacyPath = PlayerProfile.GetCharacterFolderPath(FileHelpers.FileSource.Legacy);
+		string legacyPath = SaveSystem.GetCharacterFolderPath(FileHelpers.FileSource.Legacy);
 		if (Directory.Exists(legacyPath))
 		{
 			foreach (string s in Directory.GetFiles(legacyPath))

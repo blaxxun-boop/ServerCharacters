@@ -1,6 +1,6 @@
 bin
 obj
-/packages
+packages
 ServerCharacters.sln.DotSettings.user
 .idea
 .vs

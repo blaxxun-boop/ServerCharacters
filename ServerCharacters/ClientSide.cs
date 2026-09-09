@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -16,6 +17,7 @@ using Steamworks;
 using TMPro;
 using UnityEngine;
 using YamlDotNet.Serialization;
+using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
@@ -113,6 +115,7 @@ public static class ClientSide
 							{
 								name += " " + args[lastArg++];
 							}
+
 							name = name.Substring(0, name.Length - 1);
 						}
 
@@ -148,6 +151,7 @@ public static class ClientSide
 							{
 								name += " " + args[lastArg++];
 							}
+
 							name = name.Substring(0, name.Length - 1);
 						}
 
@@ -183,6 +187,7 @@ public static class ClientSide
 							{
 								name += " " + args[lastArg++];
 							}
+
 							name = name.Substring(0, name.Length - 1);
 						}
 
@@ -208,6 +213,7 @@ public static class ClientSide
 						{
 							name += " " + args[lastArg++];
 						}
+
 						name = name.Substring(0, name.Length - 1);
 					}
 
@@ -229,6 +235,7 @@ public static class ClientSide
 							Player.m_localPlayer.TeleportTo(pos, Quaternion.identity, true);
 						}
 					}
+
 					ServerCharacters.selfReference.StartCoroutine(AwaitResponse());
 					return;
 				}
@@ -244,6 +251,7 @@ public static class ClientSide
 						{
 							name += " " + args[lastArg++];
 						}
+
 						name = name.Substring(0, name.Length - 1);
 					}
 
@@ -258,6 +266,7 @@ public static class ClientSide
 						Vector3 pos = task.Result;
 						args.Context.AddString(pos == Vector3.zero ? "A player with this name is not online." : "The player is being summoned, please wait a second.");
 					}
+
 					ServerCharacters.selfReference.StartCoroutine(AwaitResponse());
 					return;
 				}
@@ -316,6 +325,7 @@ public static class ClientSide
 
 				currentlySaving = false;
 			}
+
 			if (forceSynchronousSaving)
 			{
 				foreach (bool sending in Shared.sendCompressedDataToPeer(ZNet.instance.GetServerPeer(), iDied && ServerCharacters.hardcoreMode.GetToggle() ? "ServerCharacters PlayerDied" : "ServerCharacters PlayerProfile", packageArray))
@@ -351,7 +361,9 @@ public static class ClientSide
 	[HarmonyPatch]
 	private class EnableSocketLinger
 	{
-		private static void dummy() { }
+		private static void dummy()
+		{
+		}
 
 		private static MethodInfo TargetMethod() => Type.GetType(nameof(ZSteamSocket) + ", assembly_valheim") is { } steamSocket ? AccessTools.DeclaredMethod(steamSocket, nameof(ZSteamSocket.Close)) : AccessTools.DeclaredMethod(typeof(EnableSocketLinger), nameof(dummy));
 
@@ -366,6 +378,7 @@ public static class ClientSide
 					yield return new CodeInstruction(OpCodes.Pop);
 					yield return new CodeInstruction(OpCodes.Ldc_I4_1);
 				}
+
 				yield return instruction;
 			}
 		}
@@ -606,6 +619,7 @@ public static class ClientSide
 			{
 				return;
 			}
+
 			acquireCharacterFromTemplate = false;
 
 			Player.m_localPlayer.m_inventory.RemoveAll();
@@ -632,7 +646,7 @@ public static class ClientSide
 					Inventory inventory = Player.m_localPlayer.m_inventory;
 					foreach (KeyValuePair<string, int> item in template.items)
 					{
-						inventory.AddItem(item.Key, item.Value, 1, 0, 0, "");
+						inventory.AddItem(item.Key, item.Value, 1, 0, 0, "", false);
 					}
 
 					if (template.spawn is { Count: > 0 } spawnPos)
@@ -860,19 +874,23 @@ public static class ClientSide
 			{
 				__instance.m_connectionFailedError.text = "Server is undergoing maintenance. Please try again later.";
 			}
+
 			if ((int)ZNet.GetConnectionStatus() == ServerCharacters.CharacterNameDisconnectMagic)
 			{
 				__instance.m_connectionFailedError.text = "Your character name contains illegal characters. Please choose a different name.";
 			}
+
 			if ((int)ZNet.GetConnectionStatus() == ServerCharacters.SingleCharacterModeDisconnectMagic)
 			{
 				__instance.m_connectionFailedError.text = "You are not allowed to create more than one character on this server.";
 			}
+
 			if (__instance.m_connectionFailedPanel.activeSelf && connectionError != null)
 			{
 				__instance.m_connectionFailedError.text += "\n" + connectionError;
 				connectionError = null;
 			}
+
 			if (iDied && ServerCharacters.hardcoreMode.GetToggle())
 			{
 				__instance.m_connectionFailedError.text = "You died on a hardcore server. You can continue to use your character in singleplayer, but will have to create a new one to connect to the server.";
@@ -1042,6 +1060,7 @@ public static class ClientSide
 			if (!queuedThisFrame && __instance == Player.m_localPlayer?.m_inventory && ZNet.instance.GetServerPeer() is { } serverPeer)
 			{
 				queuedThisFrame = true;
+
 				IEnumerator saveAsync()
 				{
 					yield return null;
@@ -1058,6 +1077,7 @@ public static class ClientSide
 						}
 					}
 				}
+
 				ZNet.instance.StartCoroutine(saveAsync());
 			}
 		}

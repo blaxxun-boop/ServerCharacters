@@ -50,7 +50,7 @@ public static class Utils
 		ServerCharacters.logger.LogMessage(message);
 	}
 
-	public static string CharacterSavePath => PlayerProfile.GetCharacterFolderPath(FileHelpers.FileSource.Local);
+	public static string CharacterSavePath => SaveSystem.GetCharacterFolderPath(FileHelpers.FileSource.Local);
 
 	public static bool IsServerCharactersFilePattern(string file) => file.Split('_').Length >= 3 && file.EndsWith(".fch", StringComparison.Ordinal) && !file.Contains("_backup_");
 
@@ -100,7 +100,7 @@ public static class Utils
 				{
 					lastTouch = loggedIn ? 0 : ((DateTimeOffset)file.LastWriteTimeUtc).ToUnixTimeSeconds(),
 				};
-				foreach (KeyValuePair<PlayerStatType, float> kv in profile.m_playerStats.m_stats)
+				foreach (KeyValuePair<PlayerStatType, float> kv in profile.m_playerStats[0].m_stats)
 				{
 					player.statistics.Stats[kv.Key.ToString()] = kv.Value;
 				}

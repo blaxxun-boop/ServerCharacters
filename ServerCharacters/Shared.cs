@@ -139,46 +139,15 @@ public static class Shared
 		private static IEnumerable<CodeInstruction> Transpiler(ILGenerator ilGenerator)
 		{
 			IEnumerable<CodeInstruction> instructions = PatchProcessor.GetOriginalInstructions(AccessTools.DeclaredMethod(typeof(PlayerProfile), nameof(PlayerProfile.LoadPlayerFromDisk)), ilGenerator);
-			yield return new CodeInstruction(OpCodes.Ldarg_1) { blocks = instructions.First().blocks }; // byte[] data
-			yield return new CodeInstruction(OpCodes.Newobj, AccessTools.DeclaredConstructor(typeof(ZPackage), new[] { typeof(byte[]) }));
-			foreach (CodeInstruction instruction in instructions.Skip(2)) // skip this.LoadPlayerDataFromDisk()
-			{
-				yield return instruction;
-			}
-		}
-	}
 
-	[HarmonyPatch(typeof(ZNet), nameof(ZNet.RPC_PeerInfo))]
-	private static class PatchZNetRPC_PeerInfo
-	{
-		[HarmonyPriority(Priority.Last)]
-		private static bool Prefix(ZRpc rpc, ref ZPackage pkg)
-		{
-			_ = pkg.ReadLong();
-			string versionString = pkg.ReadString();
-			pkg.SetPos(0);
-
-			if (ZNet.instance.IsServer() && !versionString.Contains("-ServerCharacters"))
-			{
-				rpc.Invoke("Error", (int)ZNet.ConnectionStatus.ErrorVersion);
-				Utils.Log($"Client {rpc.m_socket.GetHostName()} tried to connect without having ServerCharacters installed and got disconnected.");
-				return false;
-			}
-
-			return true;
-		}
-	}
-
-	[HarmonyPatch(typeof(GameVersion), nameof(GameVersion.ToString))]
-	private static class PatchVersionGetVersionString
-	{
-		[HarmonyPriority(Priority.Last)]
-		private static void Postfix(GameVersion __instance, ref string __result)
-		{
-			if (__instance == Version.CurrentVersion)
-			{
-				__result += "-ServerCharacters";
-			}
+			return new CodeMatcher(instructions).Start()
+				.MatchForward(false, new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(PlayerProfile), nameof(PlayerProfile.LoadPlayerDataFromDisk))))
+				.RemoveInstruction()
+				.Insert(
+					new CodeInstruction(OpCodes.Pop),
+					new CodeInstruction(OpCodes.Ldarg_1) { blocks = instructions.First().blocks }, // byte[] data
+					new CodeInstruction(OpCodes.Newobj, AccessTools.DeclaredConstructor(typeof(ZPackage), new[] { typeof(byte[]) }))
+				).Instructions();
 		}
 	}
 

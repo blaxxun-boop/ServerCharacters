@@ -572,7 +572,7 @@ public static class ServerSide
 
 	private static void backupProfile(PlayerProfile profile)
 	{
-		string saveFile = PlayerProfile.GetCharacterFolderPath(profile.m_fileSource) + profile.m_filename + ".fch.old";
+		string saveFile = SaveSystem.GetCharacterFolderPath(profile.m_fileSource) + profile.m_filename + ".fch.old";
 		if (FileHelpers.Exists(saveFile, profile.m_fileSource))
 		{
 			Directory.CreateDirectory(Utils.CharacterSavePath + Path.DirectorySeparatorChar + "backups");
@@ -637,7 +637,7 @@ public static class ServerSide
 
 	private class DummyPlayer : Player
 	{
-		public override void Message(MessageHud.MessageType type, string msg, int amount = 0, Sprite? icon = null)
+		public override void Message(MessageHud.MessageType type, string msg, int amount = 0, Sprite? icon = null, bool log = false)
 		{
 		}
 	}
@@ -787,7 +787,7 @@ public static class ServerSide
 		[UsedImplicitly]
 		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilGenerator)
 		{
-			MethodInfo inventorySave = AccessTools.DeclaredMethod(typeof(Inventory), nameof(Inventory.Load));
+			MethodInfo inventorySave = AccessTools.DeclaredMethod(typeof(Inventory), nameof(Inventory.Load), [typeof(ZPackage)]);
 			return PlayerProfileConsumeUntil(ilGenerator, inventorySave);
 		}
 	}
